@@ -1,20 +1,33 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
-import { MdDarkMode, MdLightMode } from "react-icons/md";
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { MdDarkMode, MdLightMode, MdSearch } from "react-icons/md";
 
 import { applyTheme, getSavedTheme, getSystemTheme, saveTheme, Theme } from "../theme";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [sp] = useSearchParams();
   const initial = useMemo(() => sp.get("q") ?? "", [sp]);
   const [q, setQ] = useState(initial);
   const [theme, setTheme] = useState<Theme>("light");
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Check if we are in admin section
+  const isAdmin = location.pathname.startsWith("/admin");
 
   useEffect(() => {
     const t = getSavedTheme() ?? getSystemTheme();
     setTheme(t);
     applyTheme(t);
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const onSearch = (e: FormEvent) => {
@@ -30,44 +43,50 @@ export function Layout({ children }: { children: React.ReactNode }) {
     saveTheme(next);
   };
 
+  // If admin, render just children (admin pages have their own layout)
+  if (isAdmin) {
+    return <>{children}</>;
+  }
+
   return (
     <>
-      <div className="nav">
+      <div className={`nav ${isScrolled ? "scrolled" : "transparent"}`}>
         <div className="container navInner">
           <Link to="/" className="brand">
-            <span className="brandDot" />
             <span>YaBlog</span>
           </Link>
           <div className="navLinks">
+            <NavLink to="/">首页</NavLink>
             <NavLink to="/archive">归档</NavLink>
             <NavLink to="/tags">标签</NavLink>
-            <NavLink to="/categories">分类</NavLink>
             <NavLink to="/about">关于</NavLink>
-            <NavLink to="/admin">后台</NavLink>
           </div>
           <div className="navRight">
-            <button
-              type="button"
-              className="iconButton"
-              onClick={toggleTheme}
-              aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
-              data-tooltip={theme === "dark" ? "浅色模式" : "深色模式"}
-            >
-              {theme === "dark" ? <MdLightMode /> : <MdDarkMode />}
-            </button>
             <form className="search" onSubmit={onSearch}>
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="搜索文章…"
+                placeholder="搜索..."
               />
             </form>
+            <button
+              type="button"
+              className="iconButton"
+              onClick={toggleTheme}
+              aria-label="Toggle Theme"
+            >
+              {theme === "dark" ? <MdLightMode /> : <MdDarkMode />}
+            </button>
           </div>
         </div>
       </div>
+
       {children}
+
       <div className="footer">
-        <div className="container">© {new Date().getFullYear()} YaBlog · React + Node.js + SQLite</div>
+        <div className="container">
+          <p>© {new Date().getFullYear()} YaBlog · Designed with Butterfly Style</p>
+        </div>
       </div>
     </>
   );

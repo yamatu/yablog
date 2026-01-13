@@ -1,34 +1,40 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { MdKeyboardArrowDown } from "react-icons/md";
 
 import { api, Post } from "../api";
 import { PostCard } from "../components/PostCard";
-
-function formatDate(iso: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
-}
+import { Sidebar } from "../components/Sidebar";
+import { useSite } from "../site";
 
 export function HomePage() {
-  const [featured, setFeatured] = useState<Post[]>([]);
-  const [latest, setLatest] = useState<Post[]>([]);
-  const [total, setTotal] = useState<number>(0);
+  const { site } = useSite();
+  const [pinned, setPinned] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 10;
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const f = await api.listPosts({ featured: true, limit: 6 });
-        const l = await api.listPosts({ limit: 12 });
+        setLoading(true);
+        const p = await api.listPosts({ pinned: true, limit: 3 });
+        const l = await api.listPosts({ featured: false, page: 1, limit });
         if (!alive) return;
-        setFeatured(f.items);
-        setLatest(l.items);
+        setPinned(p.items);
+        setPosts(l.items);
         setTotal(l.total);
+        setPage(1);
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? String(e));
+      } finally {
+        if (!alive) return;
+        setLoading(false);
       }
     })();
     return () => {
@@ -36,120 +42,97 @@ export function HomePage() {
     };
   }, []);
 
-  const scrollToFeed = () => {
-    document.getElementById("feed")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToContent = () => {
+    document.getElementById("content")?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const heroImage =
+    site?.images.homeHero ||
+    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80";
+
+  const goToPage = async (nextPage: number) => {
+    const p = Math.max(1, nextPage);
+    setErr(null);
+    setLoading(true);
+    try {
+      const res = await api.listPosts({ featured: false, page: p, limit });
+      setPosts(res.items);
+      setTotal(res.total);
+      setPage(p);
+      scrollToContent();
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
   return (
-    <>
-      <div className="landing">
-        <div className="container">
-          <div className="landingStage">
-            <div>
-              <div className="kicker">
-                <span className="kickerDot" />
-                <span>Minimal · Elegant · Powerful</span>
-              </div>
-              <h1 className="landingTitle">把你的文字，做成一扇落地窗。</h1>
-              <p className="landingSub">
-                这是一个更大气的全栈博客模板：React + Node.js + SQLite。支持后台登录、文章发布、精选置顶、标签分类与搜索。
-              </p>
-              <div className="ctaRow">
-                <Link className="btnPrimary" to="/archive">
-                  浏览文章
-                </Link>
-                <Link className="btnGhost" to="/admin">
-                  进入后台
-                </Link>
-              </div>
-              <div
-                className="scrollHint"
-                onClick={scrollToFeed}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") scrollToFeed();
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <span className="scrollPill">↓</span>
-                <span>向下滑动，进入正文</span>
-              </div>
-              {err ? <p className="muted">加载失败：{err}</p> : null}
-            </div>
-
-            <div className="landingWindow">
-              <div className="landingWindowInner">
-                <div className="windowHeader">
-                  <div>
-                    <div className="windowTitle">今日概览</div>
-                    <div className="windowMeta">
-                      已发布文章：{total} · 精选：{featured.length}
-                    </div>
-                  </div>
-                  <Link className="pill" to="/admin">
-                    管理
-                  </Link>
-                </div>
-
-                <div className="windowGrid">
-                  <div className="windowTile">
-                    <div className="windowTileTitle">写作体验</div>
-                    <p className="windowTileSub">
-                      后台支持 Markdown 编辑、快捷按钮（标题/链接/表格等），更高效地写内容。
-                    </p>
-                  </div>
-                  <div className="windowTile">
-                    <div className="windowTileTitle">双主题</div>
-                    <p className="windowTileSub">支持黑/白主题切换，整体更像 Apple 风格的克制与质感。</p>
-                  </div>
-                </div>
-
-                <div className="windowGrid">
-                  {latest.slice(0, 4).map((p) => (
-                    <Link key={p.id} to={`/post/${p.slug}`} className="windowTile">
-                      <div className="windowTileTitle">{p.title}</div>
-                      <p className="windowTileSub">
-                        {p.summary ? p.summary : "打开阅读 →"} · {formatDate(p.publishedAt ?? p.updatedAt)}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className="butterfly-layout">
+      {/* Hero Section */}
+      <div
+        className="butterfly-hero"
+        style={{ backgroundImage: `url(${heroImage})` }}
+      >
+        <div className="hero-overlay" />
+        <div className="hero-content">
+          <h1 className="hero-title">YaBlog</h1>
+          <p className="hero-subtitle">Minimal · Elegant · Powerful</p>
+        </div>
+        <div className="scroll-down" onClick={scrollToContent}>
+          <MdKeyboardArrowDown />
         </div>
       </div>
 
-      <div id="feed" className="container" style={{ paddingBottom: 46 }}>
-        <div className="split">
-          <div className="glass content">
-            <h2 style={{ marginTop: 0, letterSpacing: "-0.02em" }}>精选</h2>
-            <div className="muted">用于首页上方展示的文章。</div>
-            <div style={{ height: 12 }} />
-            {featured.length ? (
-              <div style={{ display: "grid", gap: 12 }}>
-                {featured.map((p) => (
-                  <PostCard key={p.id} post={p} />
+      {/* Main Content Area */}
+      <div id="content" className="main-content">
+        <div className="post-list">
+          {err ? <div className="card" style={{ padding: 20 }}>加载失败：{err}</div> : null}
+
+          {pinned.length ? (
+            <div className="card" style={{ padding: 22, marginBottom: 16 }}>
+              <div className="widget-title" style={{ marginBottom: 14 }}>置顶文章</div>
+              <div style={{ display: "grid", gap: 14 }}>
+                {pinned.map((p, index) => (
+                  <PostCard key={p.id} post={p} index={index} />
                 ))}
               </div>
-            ) : (
-              <div className="muted">
-                还没有精选文章。去 <Link to="/admin">后台</Link> 勾选“首页精选”即可显示。
-              </div>
-            )}
-          </div>
-          <div className="glass content">
-            <h2 style={{ marginTop: 0, letterSpacing: "-0.02em" }}>最新文章</h2>
-            <div className="muted">向下滑动后的“正文区域”。</div>
-            <div style={{ height: 12 }} />
-            <div className="grid" style={{ paddingTop: 0 }}>
-              {latest.map((p) => (
-                <PostCard key={p.id} post={p} />
+            </div>
+          ) : null}
+
+          <div className="card" style={{ padding: 22 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div className="widget-title" style={{ margin: 0 }}>最新文章</div>
+              <Link to="/archive" className="muted">查看全部 →</Link>
+            </div>
+            <div style={{ height: 14 }} />
+            <div style={{ display: "grid", gap: 14 }}>
+              {posts.map((p, index) => (
+                <PostCard key={p.id} post={p} index={index} />
               ))}
+              {!posts.length && !loading ? <div className="muted" style={{ padding: 16 }}>暂无文章</div> : null}
+            </div>
+
+            <div className="pager">
+              <button onClick={() => goToPage(page - 1)} disabled={loading || page <= 1}>
+                上一页
+              </button>
+              <div className="muted">
+                第 {page} / {totalPages} 页
+              </div>
+              <button onClick={() => goToPage(page + 1)} disabled={loading || page >= totalPages}>
+                下一页
+              </button>
             </div>
           </div>
+
         </div>
+
+        {/* Sidebar */}
+        <Sidebar />
       </div>
-    </>
+    </div>
   );
 }

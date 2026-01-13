@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } 
 
 import { api, Post, User } from "../../api";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
+import { useSite } from "../../site";
 
 function useMe() {
   const [user, setUser] = useState<User | null>(null);
@@ -29,12 +30,25 @@ function useMe() {
   return { user, loading, refresh: async () => api.me().then((r) => setUser(r.user)) };
 }
 
+// Wrap admin pages in a simple centered container since we removed the public layout
+const AdminLayoutWrapper = ({ children }: { children: React.ReactNode }) => (
+  <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "40px 20px" }}>
+    <div className="container" style={{ maxWidth: 1000 }}>
+      {children}
+    </div>
+  </div>
+);
+
 export function AdminIndexPage() {
   const { user, loading } = useMe();
   const location = useLocation();
   if (loading) return <div className="container" style={{ padding: "26px 0" }}>加载中…</div>;
   if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
-  return <AdminDashboard user={user} />;
+  return (
+    <AdminLayoutWrapper>
+      <AdminDashboard user={user} />
+    </AdminLayoutWrapper>
+  );
 }
 
 export function AdminLoginPage() {
@@ -63,21 +77,21 @@ export function AdminLoginPage() {
   };
 
   return (
-    <div className="container" style={{ padding: "26px 0 50px" }}>
-      <div className="glass content" style={{ maxWidth: 520, margin: "0 auto" }}>
-        <h2 style={{ marginTop: 0 }}>后台登录</h2>
-        <div className="muted">请输入后台账号密码</div>
-        <div style={{ height: 16 }} />
-        <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="用户名" />
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
+      <div className="glass content" style={{ width: "100%", maxWidth: 400, padding: 40 }}>
+        <h2 style={{ marginTop: 0, textAlign: 'center' }}>后台登录</h2>
+        <div style={{ height: 20 }} />
+        <form onSubmit={onSubmit} style={{ display: "grid", gap: 20 }}>
+          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="用户名" style={{ padding: 12 }} />
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="密码"
+            style={{ padding: 12 }}
           />
-          <button disabled={loading}>{loading ? "登录中…" : "登录"}</button>
-          {err ? <div className="muted">登录失败：{err}</div> : null}
+          <button disabled={loading} style={{ padding: 12, fontSize: 16 }}>{loading ? "登录中…" : "登录"}</button>
+          {err ? <div className="muted" style={{ textAlign: "center", color: "red" }}>{err}</div> : null}
         </form>
       </div>
     </div>
@@ -109,60 +123,89 @@ function AdminDashboard({ user }: { user: User }) {
   }, [refresh]);
 
   const onLogout = async () => {
-    await api.logout().catch(() => {});
+    await api.logout().catch(() => { });
     navigate("/admin/login", { replace: true });
   };
 
   return (
-    <div className="container" style={{ padding: "26px 0 50px" }}>
-      <div className="glass content">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <h2 style={{ margin: 0 }}>后台</h2>
-            <div className="muted">已登录：{user.username}</div>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => navigate("/admin/new")}>新建文章</button>
-            <button onClick={() => navigate("/admin/settings")}>设置</button>
-            <button onClick={onLogout}>退出</button>
-          </div>
+    <div className="glass content">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: 'center', marginBottom: 30 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>控制台</h2>
+          <div className="muted">欢迎回来，{user.username}</div>
         </div>
-
-        <div style={{ height: 14 }} />
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索标题/内容…" />
-          <button onClick={refresh} disabled={loading}>
-            {loading ? "刷新中…" : "刷新"}
-          </button>
-          {err ? <span className="muted">错误：{err}</span> : null}
+        <div style={{ display: "flex", gap: 12 }}>
+          <button onClick={() => navigate("/admin/new")}>+ 新建文章</button>
+          <button onClick={() => navigate("/admin/settings")} style={{ background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)' }}>设置</button>
+          <button onClick={onLogout} style={{ background: 'transparent', color: 'var(--muted2)', border: 'none', boxShadow: 'none' }}>退出</button>
         </div>
+      </div>
 
-        <div style={{ height: 14 }} />
-        <div style={{ display: "grid", gap: 12 }}>
-          {items.map((p) => (
-            <div key={p.id} className="card" style={{ cursor: "default" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 650 }}>{p.title}</div>
-                  <div className="meta">
-                    <span className="pill">{p.status}</span>
-                    {p.featured ? <span className="pill">精选</span> : null}
-                    <span className="pill">/{p.slug}</span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <Link to={`/post/${p.slug}`} className="pill">
-                    预览
-                  </Link>
-                  <Link to={`/admin/edit/${p.id}`} className="pill">
-                    编辑
-                  </Link>
-                </div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索文章..." style={{ flex: 1 }} />
+        <button onClick={refresh} disabled={loading}>
+          {loading ? "..." : "搜索"}
+        </button>
+      </div>
+
+      {err ? <div className="muted" style={{ marginBottom: 20 }}>错误：{err}</div> : null}
+
+      <div style={{ display: "flex", flexDirection: 'column', gap: 10 }}>
+        {items.map((p) => (
+          <div key={p.id} className="card" style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 0 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{p.title}</div>
+              <div className="meta" style={{ display: 'flex', gap: 8, fontSize: 12 }}>
+                <span className={`pill ${p.status === 'published' ? 'active' : ''}`} style={{ color: p.status === 'published' ? 'green' : 'orange' }}>{p.status === 'published' ? '已发布' : '草稿'}</span>
+                {p.featured ? <span className="pill" style={{ color: 'var(--accent)' }}>置顶</span> : null}
+                <span className="pill">排序 {p.sortOrder ?? 0}</span>
+                <span className="muted">/{p.slug}</span>
               </div>
             </div>
-          ))}
-          {!items.length && !loading ? <div className="muted">暂无文章</div> : null}
-        </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={async () => {
+                  await api.adminUpdatePostOrder(p.id, { featured: !Boolean(p.featured) });
+                  refresh();
+                }}
+                className="pill"
+                style={{ background: "transparent" }}
+                title="置顶/取消置顶"
+              >
+                {p.featured ? "取消置顶" : "置顶"}
+              </button>
+              <button
+                onClick={async () => {
+                  await api.adminUpdatePostOrder(p.id, { sortOrder: (p.sortOrder ?? 0) + 1 });
+                  refresh();
+                }}
+                className="pill"
+                style={{ background: "transparent" }}
+                title="排序 +1"
+              >
+                ↑
+              </button>
+              <button
+                onClick={async () => {
+                  await api.adminUpdatePostOrder(p.id, { sortOrder: (p.sortOrder ?? 0) - 1 });
+                  refresh();
+                }}
+                className="pill"
+                style={{ background: "transparent" }}
+                title="排序 -1"
+              >
+                ↓
+              </button>
+              <Link to={`/post/${p.slug}`} target="_blank" className="pill">
+                查看
+              </Link>
+              <Link to={`/admin/edit/${p.id}`} className="pill" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+                编辑
+              </Link>
+            </div>
+          </div>
+        ))}
+        {!items.length && !loading ? <div className="muted" style={{ textAlign: 'center', padding: 40 }}>暂无文章</div> : null}
       </div>
     </div>
   );
@@ -179,18 +222,19 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [summary, setSummary] = useState("");
+  const [coverImage, setCoverImage] = useState("");
   const [contentMd, setContentMd] = useState("# Hello YaBlog\n\n开始写作吧。");
   const [tags, setTags] = useState("");
   const [categories, setCategories] = useState("");
   const [status, setStatus] = useState<"draft" | "published">("draft");
   const [featured, setFeatured] = useState(false);
+  const [sortOrder, setSortOrder] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (mode === "new") return;
     if (!id) return;
-    // simple fetch via admin list; acceptable for MVP
     (async () => {
       try {
         const res = await api.adminListPosts({ limit: 100 });
@@ -200,11 +244,13 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
           setTitle(found.title);
           setSlug(found.slug);
           setSummary(found.summary ?? "");
+          setCoverImage(found.coverImage ?? "");
           setContentMd(found.contentMd);
           setTags(found.tags.join(","));
           setCategories(found.categories.join(","));
           setStatus(found.status);
           setFeatured(Boolean(found.featured));
+          setSortOrder(found.sortOrder ?? 0);
         }
       } catch (e: any) {
         setErr(e?.message ?? String(e));
@@ -212,7 +258,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
     })();
   }, [id, mode]);
 
-  if (loading) return <div className="container" style={{ padding: "26px 0" }}>加载中…</div>;
+  if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
 
   const onSave = async () => {
@@ -223,17 +269,13 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
         title: title.trim(),
         slug: slug.trim() || undefined,
         summary: summary.trim() || undefined,
+        coverImage: coverImage.trim() || undefined,
         contentMd,
-        tags: tags
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        categories: categories
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        tags: tags.split(",").map((s) => s.trim()).filter(Boolean),
+        categories: categories.split(",").map((s) => s.trim()).filter(Boolean),
         status,
         featured,
+        sortOrder,
       };
 
       if (mode === "new") {
@@ -263,79 +305,130 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
   };
 
   return (
-    <div className="container" style={{ padding: "26px 0 50px" }}>
+    <AdminLayoutWrapper>
       <div className="glass content">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
-            <h2 style={{ margin: 0 }}>{mode === "new" ? "新建文章" : "编辑文章"}</h2>
-            <div className="muted">支持 Markdown（GFM）。</div>
+            <button onClick={() => navigate("/admin")} style={{ background: 'transparent', color: 'var(--muted)', padding: 0, boxShadow: 'none', marginBottom: 5 }}>← 返回列表</button>
+            <h2 style={{ margin: 0 }}>{mode === "new" ? "撰写新文章" : "编辑文章"}</h2>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => navigate("/admin")}>返回列表</button>
-            {mode === "edit" ? (
-              <Link to={post ? `/post/${post.slug}` : "/"} className="pill">
-                预览
+          <div style={{ display: "flex", gap: 10 }}>
+            {mode === "edit" && post && (
+              <Link to={`/post/${post.slug}`} target="_blank" className="pill" style={{ height: 40, lineHeight: '30px', padding: '0 15px' }}>
+                预览页面
               </Link>
-            ) : null}
+            )}
+            <button onClick={onSave} disabled={saving} style={{ padding: "0 24px" }}>
+              {saving ? "保存中…" : "保存更改"}
+            </button>
           </div>
         </div>
 
-        <div style={{ height: 14 }} />
-        <div style={{ display: "grid", gap: 12 }}>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="标题" />
-          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="slug（可空）" />
-          <input
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder="摘要（可空）"
-          />
-          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="标签：a,b,c" />
-          <input
-            value={categories}
-            onChange={(e) => setCategories(e.target.value)}
-            placeholder="分类：tech,life"
-          />
-
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <label className="pill" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={status === "published"}
-                onChange={(e) => setStatus(e.target.checked ? "published" : "draft")}
-              />
-              发布
-            </label>
-            <label className="pill" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={featured}
-                onChange={(e) => setFeatured(e.target.checked)}
-              />
-              首页精选
-            </label>
+        <div style={{ display: "grid", gap: 20 }}>
+          {/* Title Area */}
+          <div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="在此输入文章标题..."
+              style={{ fontSize: 24, fontWeight: 'bold', padding: 15, height: 60 }}
+            />
           </div>
 
-          <MarkdownEditor value={contentMd} onChange={setContentMd} placeholder="Markdown 内容" minHeight={420} />
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+            {/* Main Editor */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <MarkdownEditor value={contentMd} onChange={setContentMd} placeholder="开始写作..." minHeight={600} />
+            </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <button onClick={onSave} disabled={saving}>
-              {saving ? "保存中…" : "保存"}
-            </button>
-            {mode === "edit" ? (
-              <button onClick={onDelete} disabled={saving} style={{ borderColor: "rgba(255, 120, 120, 0.35)" }}>
-                删除
-              </button>
-            ) : null}
-            {err ? <span className="muted">错误：{err}</span> : null}
+            {/* Sidebar Settings */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+	              <div className="card" style={{ padding: 20 }}>
+	                <div className="widget-title">文章设置</div>
+	                <div style={{ display: 'grid', gap: 10 }}>
+	                  <label style={{ fontSize: 13, color: 'var(--muted)' }}>Slug (URL路径):</label>
+	                  <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="example-post" />
+
+	                  <label style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>摘要:</label>
+	                  <textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="文章简介..." rows={3} style={{ resize: 'vertical' }} />
+
+                    <label style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>顶部图片 (Cover):</label>
+                    <input value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="https://..." />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        try {
+                          const res = await api.adminUploadImage(f);
+                          setCoverImage(res.url);
+                        } catch (err: any) {
+                          setErr(err?.message ?? String(err));
+                        }
+                      }}
+                    />
+                    {coverImage ? (
+                      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
+                        <img src={coverImage} alt="cover" style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+                      </div>
+                    ) : null}
+	                </div>
+	              </div>
+
+              <div className="card" style={{ padding: 20 }}>
+                <div className="widget-title">分类与标签</div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <label style={{ fontSize: 13, color: 'var(--muted)' }}>分类 (逗号分隔):</label>
+                  <input value={categories} onChange={(e) => setCategories(e.target.value)} placeholder="技术, 生活" />
+
+                  <label style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>标签 (逗号分隔):</label>
+                  <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="React, Node.js" />
+                </div>
+              </div>
+
+	              <div className="card" style={{ padding: 20 }}>
+	                <div className="widget-title">发布状态</div>
+	                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+	                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+	                    <input type="checkbox" checked={status === "published"} onChange={(e) => setStatus(e.target.checked ? "published" : "draft")} style={{ width: 'auto' }} />
+	                    <span>立即发布</span>
+	                  </label>
+	                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+	                    <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} style={{ width: 'auto' }} />
+	                    <span>置顶文章 (首页置顶)</span>
+	                  </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>排序权重（数字越大越靠前）</span>
+                      <input
+                        type="number"
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
+                      />
+                    </label>
+	                </div>
+	              </div>
+
+              {mode === "edit" ? (
+                <button onClick={onDelete} className="btn" style={{ background: '#ff4d4f', color: 'white', justifyContent: 'center' }}>
+                  删除此文章
+                </button>
+              ) : null}
+
+            </div>
           </div>
+
+          {err ? <div className="card" style={{ padding: 15, color: 'red', background: '#fff2f0', border: '1px solid #ffccc7' }}>错误：{err}</div> : null}
+
         </div>
       </div>
-    </div>
+    </AdminLayoutWrapper>
   );
 }
 
 export function AdminSettingsPage() {
   const { user, loading, refresh } = useMe();
+  const { site, refresh: refreshSite } = useSite();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -353,7 +446,29 @@ export function AdminSettingsPage() {
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
 
-  if (loading) return <div className="container" style={{ padding: "26px 0" }}>加载中…</div>;
+  const [siteDraft, setSiteDraft] = useState(site);
+  const [siteBusy, setSiteBusy] = useState(false);
+  const [siteMsg, setSiteMsg] = useState<string | null>(null);
+  const [siteErr, setSiteErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await api.adminGetSite();
+        if (!alive) return;
+        setSiteDraft(res.site);
+      } catch {
+        // ignore; fall back to public site settings if available
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
 
   const onSave = async () => {
@@ -420,82 +535,272 @@ export function AdminSettingsPage() {
     }
   };
 
+  const saveSite = async () => {
+    if (!siteDraft) return;
+    setSiteErr(null);
+    setSiteMsg(null);
+    setSiteBusy(true);
+    try {
+      await api.adminUpdateSite(siteDraft);
+      await refreshSite();
+      setSiteMsg("站点设置已保存");
+    } catch (e: any) {
+      setSiteErr(e?.message ?? String(e));
+    } finally {
+      setSiteBusy(false);
+    }
+  };
+
   return (
-    <div className="container" style={{ padding: "26px 0 50px" }}>
+    <AdminLayoutWrapper>
       <div className="glass content">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <h2 style={{ margin: 0 }}>设置</h2>
-            <div className="muted">账号：{user.username}</div>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => navigate("/admin")}>返回</button>
-          </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
+          <h2 style={{ margin: 0 }}>系统设置</h2>
+          <button onClick={() => navigate("/admin")}>返回控制台</button>
         </div>
 
-        <div style={{ height: 16 }} />
-        <div className="editorGrid" style={{ gap: 12 }}>
-          <div className="muted" style={{ fontWeight: 650 }}>
-            修改账号/密码
+        <div className="grid">
+          <div className="card" style={{ padding: 30 }}>
+            <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>修改账户信息</div>
+            <div style={{ display: 'grid', gap: 15 }}>
+              <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="当前授权密码" />
+              <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="新用户名 (留空不改)" />
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="新密码 (留空不改, 至少8位)" />
+              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="确认新密码" />
+              <button onClick={onSave} disabled={saving} style={{ marginTop: 10 }}>
+                {saving ? "保存中..." : "保存更改"}
+              </button>
+              {msg ? <span style={{ color: 'green' }}>{msg}</span> : null}
+              {err ? <span style={{ color: 'red' }}>{err}</span> : null}
+            </div>
           </div>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="当前密码"
-          />
-          <input
-            value={newUsername}
-            onChange={(e) => setNewUsername(e.target.value)}
-            placeholder="新用户名（可空）"
-          />
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="新密码（可空，至少 8 位）"
-          />
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="确认新密码"
-          />
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={onSave} disabled={saving}>
-              {saving ? "保存中…" : "保存"}
-            </button>
-            {msg ? <span className="muted">{msg}</span> : null}
-            {err ? <span className="muted">错误：{err}</span> : null}
+          <div className="card" style={{ padding: 30 }}>
+            <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>数据维护</div>
+
+            <div style={{ marginBottom: 30 }}>
+              <div className="muted" style={{ marginBottom: 10 }}>备份全部文章和数据</div>
+              <button onClick={onDownloadBackup} className="btn-follow">下载数据库备份</button>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20 }}>
+              <div className="muted" style={{ marginBottom: 10 }}>恢复数据 (危险操作)</div>
+              <input type="file" onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)} accept=".db,.gz,.db.gz" style={{ display: 'block', marginBottom: 10 }} />
+              <button onClick={onRestore} disabled={restoreBusy || !restoreFile} style={{ background: '#ff4d4f' }}>
+                {restoreBusy ? "恢复中..." : "覆盖并恢复数据"}
+              </button>
+              {restoreMsg ? <div style={{ marginTop: 10, color: 'blue' }}>{restoreMsg}</div> : null}
+            </div>
           </div>
         </div>
 
         <div style={{ height: 22 }} />
-        <div className="editorGrid" style={{ gap: 12 }}>
-          <div className="muted" style={{ fontWeight: 650 }}>
-            数据库备份/恢复
-          </div>
-          <div className="muted">备份会下载一个压缩文件（.db.gz）。恢复会上传该文件并触发服务重启。</div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={onDownloadBackup}>下载压缩备份</button>
-            {backupErr ? <span className="muted">错误：{backupErr}</span> : null}
-          </div>
+        <div className="card" style={{ padding: 30 }}>
+          <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>站点外观与内容</div>
+          {!siteDraft ? (
+            <div className="muted">加载站点设置中…</div>
+          ) : (
+            <div style={{ display: "grid", gap: 22 }}>
+              <div>
+                <div className="widget-title">顶部图片</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <input
+                    value={siteDraft.images.homeHero}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, homeHero: e.target.value } })}
+                    placeholder="首页顶部图片 URL"
+                  />
+                  <input
+                    value={siteDraft.images.archiveHero}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, archiveHero: e.target.value } })}
+                    placeholder="归档顶部图片 URL"
+                  />
+                  <input
+                    value={siteDraft.images.tagsHero}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, tagsHero: e.target.value } })}
+                    placeholder="标签/分类顶部图片 URL"
+                  />
+                  <input
+                    value={siteDraft.images.aboutHero}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, aboutHero: e.target.value } })}
+                    placeholder="关于页顶部图片 URL"
+                  />
+                  <input
+                    value={siteDraft.images.defaultPostCover}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, defaultPostCover: e.target.value } })
+                    }
+                    placeholder="文章默认封面 URL"
+                  />
+                </div>
+              </div>
 
-          <input
-            type="file"
-            accept=".db,.gz,.db.gz,application/gzip"
-            onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)}
-          />
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={onRestore} disabled={restoreBusy || !restoreFile}>
-              {restoreBusy ? "恢复中…" : "上传并恢复"}
-            </button>
-            {restoreMsg ? <span className="muted">{restoreMsg}</span> : null}
-            {restoreErr ? <span className="muted">错误：{restoreErr}</span> : null}
-          </div>
+              <div>
+                <div className="widget-title">侧边栏作者卡片</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <input
+                    value={siteDraft.sidebar.avatarUrl}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, avatarUrl: e.target.value } })
+                    }
+                    placeholder="头像 URL"
+                  />
+                  <input
+                    value={siteDraft.sidebar.name}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, name: e.target.value } })
+                    }
+                    placeholder="昵称"
+                  />
+                  <input
+                    value={siteDraft.sidebar.bio}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, bio: e.target.value } })
+                    }
+                    placeholder="简介"
+                  />
+                  <div className="muted">公告（支持 Markdown）</div>
+                  <MarkdownEditor
+                    value={siteDraft.sidebar.noticeMd}
+                    onChange={(v) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, noticeMd: v } })}
+                    minHeight={260}
+                  />
+
+                  <div className="muted">Follow 按钮</div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {siteDraft.sidebar.followButtons.map((b, i) => (
+                      <div key={`${b.label}-${i}`} style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr auto", gap: 10 }}>
+                        <input
+                          value={b.label}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.followButtons];
+                            next[i] = { ...next[i], label: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
+                          }}
+                          placeholder="按钮文字"
+                        />
+                        <input
+                          value={b.url}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.followButtons];
+                            next[i] = { ...next[i], url: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
+                          }}
+                          placeholder="链接（/about 或 https://...）"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = siteDraft.sidebar.followButtons.filter((_, idx) => idx !== i);
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
+                          }}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSiteDraft({
+                          ...siteDraft,
+                          sidebar: {
+                            ...siteDraft.sidebar,
+                            followButtons: [...siteDraft.sidebar.followButtons, { label: "新按钮", url: "https://" }],
+                          },
+                        })
+                      }
+                    >
+                      + 添加按钮
+                    </button>
+                  </div>
+
+                  <div className="muted">社媒图标（type 可用：github / youtube / rss / link）</div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {siteDraft.sidebar.socials.map((s, i) => (
+                      <div key={`${s.type}-${i}`} style={{ display: "grid", gridTemplateColumns: "0.8fr 1.8fr 1fr auto", gap: 10 }}>
+                        <input
+                          value={s.type}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.socials];
+                            next[i] = { ...next[i], type: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                          }}
+                          placeholder="type"
+                        />
+                        <input
+                          value={s.url}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.socials];
+                            next[i] = { ...next[i], url: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                          }}
+                          placeholder="https://..."
+                        />
+                        <input
+                          value={s.label ?? ""}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.socials];
+                            next[i] = { ...next[i], label: e.target.value || undefined };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                          }}
+                          placeholder="提示文字（可空）"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = siteDraft.sidebar.socials.filter((_, idx) => idx !== i);
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                          }}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSiteDraft({
+                          ...siteDraft,
+                          sidebar: {
+                            ...siteDraft.sidebar,
+                            socials: [...siteDraft.sidebar.socials, { type: "github", url: "https://github.com/" }],
+                          },
+                        })
+                      }
+                    >
+                      + 添加社媒
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="widget-title">关于页（独立，不出现在文章列表）</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <input
+                    value={siteDraft.about.title}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, about: { ...siteDraft.about, title: e.target.value } })}
+                    placeholder="关于页标题"
+                  />
+                  <MarkdownEditor
+                    value={siteDraft.about.contentMd}
+                    onChange={(v) => setSiteDraft({ ...siteDraft, about: { ...siteDraft.about, contentMd: v } })}
+                    minHeight={360}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <button onClick={saveSite} disabled={siteBusy}>
+                  {siteBusy ? "保存中…" : "保存站点设置"}
+                </button>
+                {siteMsg ? <span style={{ color: "green" }}>{siteMsg}</span> : null}
+                {siteErr ? <span style={{ color: "red" }}>{siteErr}</span> : null}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </AdminLayoutWrapper>
   );
 }

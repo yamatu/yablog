@@ -20,12 +20,13 @@ export const mountPublicRoutes = (router: Router, db: Db) => {
         tag: z.string().optional(),
         category: z.string().optional(),
         featured: z.string().optional(),
+        pinned: z.string().optional(),
       })
       .parse(req.query);
 
     const page = Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1);
     const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit ?? "10", 10) || 10));
-    const featured = parseBool(query.featured);
+    const featured = parseBool(query.pinned ?? query.featured);
 
     const { items, total } = listPosts(db, {
       includeDrafts: false,
@@ -55,4 +56,3 @@ export const mountPublicRoutes = (router: Router, db: Db) => {
     res.json({ items: listCategories(db) });
   });
 };
-

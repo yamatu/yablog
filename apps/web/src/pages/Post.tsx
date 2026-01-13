@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Link, useParams } from "react-router-dom";
+import { MdDateRange, MdLabel, MdFolder } from "react-icons/md";
 
 import { api, Post } from "../api";
 import { buildToc } from "../markdown";
+import { useSite } from "../site";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -14,6 +16,7 @@ function formatDate(iso: string | null) {
 
 export function PostPage() {
   const { slug } = useParams();
+  const { site } = useSite();
   const [post, setPost] = useState<Post | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -35,15 +38,19 @@ export function PostPage() {
     };
   }, [slug]);
 
+  const toc = useMemo(() => post ? buildToc(post.contentMd) : [], [post]);
+  let headingCursor = 0;
+  const nextHeadingId = () => toc[headingCursor++]?.id;
+
   if (err) {
     return (
-      <div className="container" style={{ padding: "30px 0 50px" }}>
-        <div className="glass content">
-          <h2 style={{ marginTop: 0 }}>未找到</h2>
+      <div className="container" style={{ padding: "100px 0" }}>
+        <div className="card content">
+          <h2 style={{ marginTop: 0 }}>Create 404</h2>
           <div className="muted">{err}</div>
           <div style={{ height: 14 }} />
           <Link to="/" className="muted">
-            返回首页
+            Back Home
           </Link>
         </div>
       </div>
@@ -52,35 +59,61 @@ export function PostPage() {
 
   if (!post) {
     return (
-      <div className="container" style={{ padding: "30px 0 50px" }}>
-        <div className="glass content">加载中…</div>
+      <div className="butterfly-hero" style={{ height: '40vh' }}>
+        <div className="hero-content">Loading...</div>
       </div>
     );
   }
 
-  const toc = useMemo(() => buildToc(post.contentMd), [post.contentMd]);
-  let headingCursor = 0;
-  const nextHeadingId = () => toc[headingCursor++]?.id;
+  const headerImage =
+    post.coverImage ||
+    site?.images.defaultPostCover ||
+    `https://source.unsplash.com/random/1920x1080?nature&sig=${post.id}`;
 
   return (
-    <div className="container" style={{ padding: "30px 0 50px" }}>
-      <div className="postLayout">
-        <div className="glass content postMain">
-          <h1 style={{ marginTop: 0 }}>{post.title}</h1>
-          <div className="meta" style={{ marginBottom: 12 }}>
-            <span className="pill">{formatDate(post.publishedAt ?? post.updatedAt)}</span>
-            {post.categories.map((c) => (
-              <Link key={c} className="pill" to={`/category/${encodeURIComponent(c)}`}>
-                {c}
-              </Link>
-            ))}
-            {post.tags.map((t) => (
-              <Link key={t} className="pill" to={`/tag/${encodeURIComponent(t)}`}>
-                #{t}
-              </Link>
-            ))}
+    <div className="butterfly-layout">
+      {/* Post Header */}
+      <div className="post-header" style={{ backgroundImage: `url(${headerImage})` }}>
+        <div className="post-header-overlay" />
+        <div className="post-header-info">
+          <h1 className="post-title">{post.title}</h1>
+          <div className="post-meta">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <MdDateRange /> {formatDate(post.publishedAt ?? post.updatedAt)}
+            </span>
+            
+            {post.categories.length > 0 && (
+              <>
+                <span style={{ margin: '0 10px' }}>|</span>
+                <MdFolder />
+                {post.categories.map((c, i) => (
+                  <span key={c}>
+                    {i > 0 && ", "}
+                    {c}
+                  </span>
+                ))}
+              </>
+            )}
+
+            {post.tags.length > 0 && (
+              <>
+                 <span style={{ margin: '0 10px' }}>|</span>
+                 <MdLabel />
+                 {post.tags.map((t, i) => (
+                  <span key={t}>
+                    {i > 0 && ", "}
+                    {t}
+                  </span>
+                ))}
+              </>
+            )}
           </div>
-          <div className="markdown">
+        </div>
+      </div>
+
+      <div className="main-content">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="card markdown">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -103,22 +136,29 @@ export function PostPage() {
           </div>
         </div>
 
-        <aside className="glass toc" aria-label="文章目录">
-          <div className="tocTitle">目录</div>
-          {toc.length ? (
-            <div className="tocList">
-              {toc.map((item) => (
-                <a
-                  key={item.id}
-                  className={`tocLink tocL${item.level}`}
-                  href={`#${item.id}`}
-                >
-                  {item.text}
-                </a>
-              ))}
+        <aside className="sidebar">
+          {toc.length > 0 && (
+            <div className="widget" style={{ position: 'sticky', top: 80 }}>
+              <div className="widget-title">目录</div>
+              <div className="tocList" style={{ maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}>
+                {toc.map((item) => (
+                  <a
+                    key={item.id}
+                    className={`tocLink tocL${item.level}`}
+                    href={`#${item.id}`}
+                    style={{ 
+                      display: 'block', 
+                      padding: '4px 0', 
+                      fontSize: '0.9rem',
+                      color: 'var(--muted)',
+                      paddingLeft: (item.level - 1) * 15
+                    }}
+                  >
+                    {item.text}
+                  </a>
+                ))}
+              </div>
             </div>
-          ) : (
-            <div className="muted">（无标题）</div>
           )}
         </aside>
       </div>

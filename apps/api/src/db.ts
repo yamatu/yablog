@@ -22,6 +22,7 @@ export type Post = {
   coverImage: string | null;
   status: "draft" | "published";
   featured: 0 | 1;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
@@ -58,6 +59,7 @@ export const initDb = (db: Db) => {
       cover_image TEXT,
       status TEXT NOT NULL CHECK (status IN ('draft','published')),
       featured INTEGER NOT NULL DEFAULT 0 CHECK (featured IN (0,1)),
+      sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       published_at TEXT
@@ -89,7 +91,25 @@ export const initDb = (db: Db) => {
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
+};
+
+const hasColumn = (db: Db, table: string, column: string) => {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return rows.some((r) => r.name === column);
+};
+
+export const migrateDb = (db: Db) => {
+  if (!hasColumn(db, "posts", "sort_order")) {
+    db.exec("ALTER TABLE posts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+  }
+  // settings table created in initDb; nothing else needed here yet
 };
 
 export const getUserByUsername = (db: Db, username: string) => {
@@ -162,6 +182,7 @@ const mapPostRow = (row: any, tags: string[], categories: string[]): Post => ({
   coverImage: row.coverImage,
   status: row.status,
   featured: row.featured,
+  sortOrder: row.sortOrder ?? 0,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   publishedAt: row.publishedAt,
@@ -212,6 +233,7 @@ export const getPostBySlug = (db: Db, slug: string): Post | null => {
         cover_image as coverImage,
         status,
         featured,
+        sort_order as sortOrder,
         created_at as createdAt,
         updated_at as updatedAt,
         published_at as publishedAt
@@ -230,6 +252,7 @@ export const getPostBySlug = (db: Db, slug: string): Post | null => {
         coverImage: string | null;
         status: "draft" | "published";
         featured: 0 | 1;
+        sortOrder: number;
         createdAt: string;
         updatedAt: string;
         publishedAt: string | null;
@@ -259,6 +282,8 @@ export const listPosts = (
   if (!args.includeDrafts) {
     clauses.push("p.status = 'published'");
   }
+  // reserved slug(s) for standalone pages
+  clauses.push("p.slug != 'about'");
   if (typeof args.featured === "boolean") {
     clauses.push("p.featured = ?");
     params.push(args.featured ? 1 : 0);
@@ -312,13 +337,14 @@ export const listPosts = (
         p.cover_image as coverImage,
         p.status,
         p.featured,
+        p.sort_order as sortOrder,
         p.created_at as createdAt,
         p.updated_at as updatedAt,
         p.published_at as publishedAt
       FROM posts p
       ${join}
       ${where}
-      ORDER BY COALESCE(p.published_at, p.updated_at) DESC
+      ORDER BY p.featured DESC, p.sort_order DESC, COALESCE(p.published_at, p.updated_at) DESC
       LIMIT ?
       OFFSET ?
       `,
@@ -381,6 +407,7 @@ export const createPost = (
     coverImage: string | null;
     status: "draft" | "published";
     featured: 0 | 1;
+    sortOrder: number;
     publishedAt: string | null;
   },
 ) => {
@@ -390,9 +417,9 @@ export const createPost = (
     .prepare(
       `
       INSERT INTO posts
-        (title, slug, summary, content_md, cover_image, status, featured, created_at, updated_at, published_at)
+        (title, slug, summary, content_md, cover_image, status, featured, sort_order, created_at, updated_at, published_at)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -403,6 +430,7 @@ export const createPost = (
       args.coverImage,
       args.status,
       args.featured,
+      args.sortOrder,
       createdAt,
       updatedAt,
       args.publishedAt,
@@ -421,6 +449,7 @@ export const updatePost = (
     coverImage: string | null;
     status: "draft" | "published";
     featured: 0 | 1;
+    sortOrder: number;
     publishedAt: string | null;
   },
 ) => {
@@ -434,6 +463,7 @@ export const updatePost = (
       cover_image = ?,
       status = ?,
       featured = ?,
+      sort_order = ?,
       updated_at = ?,
       published_at = ?
     WHERE id = ?
@@ -446,10 +476,77 @@ export const updatePost = (
     args.coverImage,
     args.status,
     args.featured,
+    args.sortOrder,
     nowIso(),
     args.publishedAt,
     args.id,
   );
+};
+
+export type SiteSettings = {
+  images: {
+    homeHero: string;
+    archiveHero: string;
+    tagsHero: string;
+    aboutHero: string;
+    defaultPostCover: string;
+  };
+  sidebar: {
+    avatarUrl: string;
+    name: string;
+    bio: string;
+    noticeMd: string;
+    followButtons: { label: string; url: string }[];
+    socials: { type: string; url: string; label?: string }[];
+  };
+  about: {
+    title: string;
+    contentMd: string;
+  };
+};
+
+export const defaultSiteSettings = (): SiteSettings => ({
+  images: {
+    homeHero: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80",
+    archiveHero: "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?auto=format&fit=crop&w=1920&q=80",
+    tagsHero: "https://images.unsplash.com/photo-1516251193007-45ef944ab0c6?auto=format&fit=crop&w=1920&q=80",
+    aboutHero: "https://images.unsplash.com/photo-1520975708790-7b8f4e6f4b2a?auto=format&fit=crop&w=1920&q=80",
+    defaultPostCover:
+      "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1200&q=80",
+  },
+  sidebar: {
+    avatarUrl: "https://api.dicebear.com/7.x/notionists/svg?seed=YaBlog",
+    name: "Admin",
+    bio: "记录生活，热爱代码",
+    noticeMd: "欢迎来到我的博客！",
+    followButtons: [{ label: "Follow Me", url: "/about" }],
+    socials: [
+      { type: "github", url: "https://github.com/" },
+      { type: "youtube", url: "https://youtube.com/" },
+    ],
+  },
+  about: {
+    title: "关于我",
+    contentMd: "在后台「设置」里编辑关于页面内容。",
+  },
+});
+
+export const getSiteSettings = (db: Db): SiteSettings => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get("site_settings") as
+    | { value: string }
+    | undefined;
+  if (!row) return defaultSiteSettings();
+  try {
+    return JSON.parse(row.value) as SiteSettings;
+  } catch {
+    return defaultSiteSettings();
+  }
+};
+
+export const setSiteSettings = (db: Db, settings: SiteSettings) => {
+  db.prepare(
+    "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+  ).run("site_settings", JSON.stringify(settings), nowIso());
 };
 
 export const deletePost = (db: Db, id: number) => {

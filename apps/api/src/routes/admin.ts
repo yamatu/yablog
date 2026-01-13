@@ -20,6 +20,7 @@ const postPayloadSchema = z.object({
   coverImage: z.string().max(2000).optional().nullable(),
   status: z.enum(["draft", "published"]).default("draft"),
   featured: z.boolean().optional().default(false),
+  sortOrder: z.number().int().optional().default(0),
   tags: z.array(z.string().max(64)).optional().default([]),
   categories: z.array(z.string().max(64)).optional().default([]),
   publishedAt: z.string().datetime().optional().nullable(),
@@ -84,6 +85,7 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       coverImage: payload.coverImage ?? null,
       status: payload.status,
       featured: payload.featured ? 1 : 0,
+      sortOrder: payload.sortOrder ?? 0,
       publishedAt,
     });
 
@@ -117,6 +119,7 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       coverImage: payload.coverImage ?? null,
       status: payload.status,
       featured: payload.featured ? 1 : 0,
+      sortOrder: payload.sortOrder ?? 0,
       publishedAt,
     });
 
@@ -132,10 +135,39 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
     res.json({ ok: true, slug });
   });
 
+  router.patch("/posts/:id/order", (req, res) => {
+    const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
+    const payload = z
+      .object({
+        featured: z.boolean().optional(),
+        sortOrder: z.number().int().optional(),
+      })
+      .refine((v) => v.featured !== undefined || v.sortOrder !== undefined, {
+        message: "featured or sortOrder required",
+      })
+      .parse(req.body);
+
+    const row = db
+      .prepare("SELECT id, title, slug, summary, content_md as contentMd, cover_image as coverImage, status, featured, sort_order as sortOrder, published_at as publishedAt FROM posts WHERE id = ?")
+      .get(id) as any;
+    if (!row) return res.status(404).json({ error: "not_found" });
+
+    const nextFeatured = payload.featured !== undefined ? (payload.featured ? 1 : 0) : row.featured;
+    const nextSortOrder = payload.sortOrder !== undefined ? payload.sortOrder : row.sortOrder;
+
+    db.prepare("UPDATE posts SET featured = ?, sort_order = ?, updated_at = ? WHERE id = ?").run(
+      nextFeatured,
+      nextSortOrder,
+      new Date().toISOString(),
+      id,
+    );
+
+    res.json({ ok: true });
+  });
+
   router.delete("/posts/:id", (req, res) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
     deletePost(db, id);
     res.json({ ok: true });
   });
 };
-

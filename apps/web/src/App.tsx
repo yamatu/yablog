@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Layout } from "./components/Layout";
+import { SiteProvider } from "./site";
 import { AboutPage } from "./pages/About";
 import {
   ArchivePage,
@@ -17,27 +18,29 @@ import { AdminEditorPage, AdminIndexPage, AdminLoginPage, AdminSettingsPage } fr
 export function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/post/:slug" element={<PostPage />} />
-          <Route path="/archive" element={<ArchivePage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/tags" element={<TagListPage />} />
-          <Route path="/tag/:tag" element={<TagPage />} />
-          <Route path="/categories" element={<CategoryListPage />} />
-          <Route path="/category/:category" element={<CategoryPage />} />
-          <Route path="/about" element={<AboutPage />} />
+      <SiteProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/post/:slug" element={<PostPage />} />
+            <Route path="/archive" element={<ArchivePage />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/tags" element={<TagListPage />} />
+            <Route path="/tag/:tag" element={<TagPage />} />
+            <Route path="/categories" element={<CategoryListPage />} />
+            <Route path="/category/:category" element={<CategoryPage />} />
+            <Route path="/about" element={<AboutPage />} />
 
-          <Route path="/admin/login" element={<AdminLoginPage />} />
-          <Route path="/admin" element={<AdminIndexPage />} />
-          <Route path="/admin/new" element={<AdminEditorPage mode="new" />} />
-          <Route path="/admin/edit/:id" element={<AdminEditorPage mode="edit" />} />
-          <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/admin" element={<AdminIndexPage />} />
+            <Route path="/admin/new" element={<AdminEditorPage mode="new" />} />
+            <Route path="/admin/edit/:id" element={<AdminEditorPage mode="edit" />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
 
-          <Route path="*" element={<HomePage />} />
-        </Routes>
-      </Layout>
+            <Route path="*" element={<HomePage />} />
+          </Routes>
+        </Layout>
+      </SiteProvider>
     </BrowserRouter>
   );
 }

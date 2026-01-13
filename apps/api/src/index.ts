@@ -12,12 +12,16 @@ import { z } from "zod";
 import { authenticateUser, hashPassword, loginSchema, signToken, verifyPassword } from "./auth.js";
 import { config } from "./config.js";
 import {
+  defaultSiteSettings,
   ensureAdminUser,
   getFirstUser,
+  getSiteSettings,
   getUserById,
   hasAnyUsers,
   initDb,
+  migrateDb,
   openDb,
+  setSiteSettings,
   updateUserCredentials,
 } from "./db.js";
 import { requireAuth, type AuthedRequest } from "./middleware.js";
@@ -26,6 +30,22 @@ import { mountPublicRoutes } from "./routes/public.js";
 
 const db = openDb();
 initDb(db);
+migrateDb(db);
+
+const uploadsDir = path.join(path.dirname(config.databasePath), "uploads");
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+// Ensure a default site settings row exists
+try {
+  const current = getSiteSettings(db);
+  // If it comes from default (missing row), persist it.
+  const exists = db.prepare("SELECT 1 as ok FROM settings WHERE key = ? LIMIT 1").get("site_settings") as
+    | { ok: 1 }
+    | undefined;
+  if (!exists) setSiteSettings(db, current ?? defaultSiteSettings());
+} catch {
+  setSiteSettings(db, defaultSiteSettings());
+}
 
 let isRestoring = false;
 let isBackingUp = false;
@@ -86,6 +106,16 @@ app.use((req, res, next) => {
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+app.get("/api/site", (_req, res) => {
+  const site = getSiteSettings(db);
+  res.json({ site });
+});
+
+app.get("/api/about", (_req, res) => {
+  const site = getSiteSettings(db);
+  res.json({ about: site.about, heroImage: site.images.aboutHero });
+});
+
 app.post("/api/auth/login", async (req, res) => {
   const creds = loginSchema.parse(req.body);
   const user = await authenticateUser(db, creds);
@@ -115,6 +145,9 @@ const publicRouter = express.Router();
 mountPublicRoutes(publicRouter, db);
 app.use("/api", publicRouter);
 
+// Serve uploaded images from the DB directory volume
+app.use("/uploads", express.static(uploadsDir));
+
 const adminRouter = express.Router();
 adminRouter.use(requireAuth);
 
@@ -141,9 +174,64 @@ adminRouter.get("/backup", async (_req, res) => {
   }
 });
 
+adminRouter.get("/site", (_req, res) => {
+  res.json({ site: getSiteSettings(db) });
+});
+
+adminRouter.put("/site", (req: AuthedRequest, res) => {
+  const siteSchema = z.object({
+    images: z.object({
+      homeHero: z.string(),
+      archiveHero: z.string(),
+      tagsHero: z.string(),
+      aboutHero: z.string(),
+      defaultPostCover: z.string(),
+    }),
+    sidebar: z.object({
+      avatarUrl: z.string(),
+      name: z.string(),
+      bio: z.string(),
+      noticeMd: z.string().default(""),
+      followButtons: z.array(z.object({ label: z.string().min(1), url: z.string().min(1) })).default([]),
+      socials: z
+        .array(z.object({ type: z.string().min(1), url: z.string().min(1), label: z.string().optional() }))
+        .default([]),
+    }),
+    about: z.object({
+      title: z.string(),
+      contentMd: z.string().default(""),
+    }),
+  });
+
+  const body = z.object({ site: siteSchema }).parse(req.body);
+  setSiteSettings(db, body.site);
+  res.json({ ok: true });
+});
+
 const upload = multer({
   dest: path.join(os.tmpdir(), "yablog_uploads"),
   limits: { fileSize: 1024 * 1024 * 1024 },
+});
+
+const uploadImage = multer({
+  dest: uploadsDir,
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
+
+adminRouter.post("/upload", uploadImage.single("file"), (req: AuthedRequest & { file?: any }, res) => {
+  const file = req.file as
+    | { filename: string; originalname: string; mimetype: string; path: string }
+    | undefined;
+  if (!file) return res.status(400).json({ error: "file_required" });
+  if (!file.mimetype.startsWith("image/")) {
+    fs.rmSync(file.path, { force: true });
+    return res.status(400).json({ error: "image_only" });
+  }
+  const ext = path.extname(file.originalname).toLowerCase() || ".img";
+  const finalName = `${file.filename}${ext}`;
+  fs.renameSync(file.path, path.join(uploadsDir, finalName));
+  const url = `/uploads/${encodeURIComponent(finalName)}`;
+  res.json({ ok: true, url });
 });
 
 adminRouter.post("/restore", upload.single("file"), async (req: AuthedRequest & { file?: any }, res) => {

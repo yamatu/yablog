@@ -7,6 +7,7 @@ export type Post = {
   coverImage: string | null;
   status: "draft" | "published";
   featured: 0 | 1;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
@@ -16,6 +17,28 @@ export type Post = {
 
 export type User = { userId: number; username: string };
 
+export type SiteSettings = {
+  images: {
+    homeHero: string;
+    archiveHero: string;
+    tagsHero: string;
+    aboutHero: string;
+    defaultPostCover: string;
+  };
+  sidebar: {
+    avatarUrl: string;
+    name: string;
+    bio: string;
+    noticeMd: string;
+    followButtons: { label: string; url: string }[];
+    socials: { type: string; url: string; label?: string }[];
+  };
+  about: {
+    title: string;
+    contentMd: string;
+  };
+};
+
 export type PostUpsertPayload = {
   title: string;
   contentMd: string;
@@ -24,6 +47,7 @@ export type PostUpsertPayload = {
   coverImage?: string | null;
   status?: "draft" | "published";
   featured?: boolean;
+  sortOrder?: number;
   tags?: string[];
   categories?: string[];
   publishedAt?: string | null;
@@ -56,6 +80,7 @@ export const api = {
     tag?: string;
     category?: string;
     featured?: boolean;
+    pinned?: boolean;
   }) => {
     const url = new URL("/api/posts", window.location.origin);
     for (const [k, v] of Object.entries(args)) {
@@ -82,6 +107,9 @@ export const api = {
 
   logout: () => json<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   me: () => json<{ user: User }>("/api/auth/me"),
+
+  site: () => json<{ site: SiteSettings }>("/api/site"),
+  about: () => json<{ about: SiteSettings["about"]; heroImage: string }>("/api/about"),
 
   adminListPosts: (args: { page?: number; limit?: number; q?: string; status?: string }) => {
     const url = new URL("/api/admin/posts", window.location.origin);
@@ -128,4 +156,28 @@ export const api = {
       body: fd,
     });
   },
+
+  adminGetSite: () => json<{ site: SiteSettings }>("/api/admin/site"),
+  adminUpdateSite: (site: SiteSettings) =>
+    json<{ ok: true }>("/api/admin/site", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ site }),
+    }),
+
+  adminUploadImage: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return json<{ ok: true; url: string }>("/api/admin/upload", {
+      method: "POST",
+      body: fd,
+    });
+  },
+
+  adminUpdatePostOrder: (id: number, payload: { featured?: boolean; sortOrder?: number }) =>
+    json<{ ok: true }>(`/api/admin/posts/${id}/order`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 };
