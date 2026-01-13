@@ -240,7 +240,7 @@ a:hover {
   gap: 15px;
 }
 
-.navToggle {
+.iconButton.navToggle {
   display: none;
 }
 
@@ -339,7 +339,7 @@ a:hover {
   .navRight .search {
     display: none;
   }
-  .navToggle {
+  .iconButton.navToggle {
     display: inline-flex;
   }
 }
