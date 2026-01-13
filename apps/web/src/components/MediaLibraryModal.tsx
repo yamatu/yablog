@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { MdClose, MdContentCopy, MdDelete, MdFileUpload, MdSearch } from "react-icons/md";
 
@@ -34,7 +34,7 @@ export function MediaLibraryPanel({
   onRequestClose?: () => void;
   showClose?: boolean;
   autoCloseOnSelect?: boolean;
-  containerStyle?: React.CSSProperties;
+  containerStyle?: CSSProperties;
 }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [q, setQ] = useState("");

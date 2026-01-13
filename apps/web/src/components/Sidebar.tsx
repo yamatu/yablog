@@ -1,6 +1,4 @@
 import { Link } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   MdCampaign,
   MdFolder,
@@ -12,6 +10,7 @@ import {
 import { FaGithub } from "react-icons/fa6";
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { Markdown } from "./Markdown";
 import { useSite } from "../site";
 
 export function Sidebar() {
@@ -104,7 +103,7 @@ export function Sidebar() {
           <MdCampaign /> 公告
         </div>
         <div className="widget-markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{sidebar?.noticeMd ?? ""}</ReactMarkdown>
+          <Markdown value={sidebar?.noticeMd ?? ""} />
         </div>
       </div>
 

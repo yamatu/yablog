@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Link } from "react-router-dom";
 
 import { api } from "../api";
+import { Markdown } from "../components/Markdown";
 import { useSite } from "../site";
 
 export function AboutPage() {
@@ -39,11 +38,11 @@ export function AboutPage() {
         <h1 className="page-banner-title">{about?.title ?? "关于"}</h1>
       </div>
 
-      <div className="container content-layer">
-        <div className="glass content">
+        <div className="container content-layer">
+          <div className="glass content">
           {about ? (
             <div className="markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{about.contentMd}</ReactMarkdown>
+              <Markdown value={about.contentMd} />
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 50 }}>

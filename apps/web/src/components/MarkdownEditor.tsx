@@ -1,6 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   MdCheckBox,
   MdCode,
@@ -24,7 +22,9 @@ import {
   MdVisibility,
 } from "react-icons/md";
 
+import { Markdown } from "./Markdown";
 import { MediaLibraryModal } from "./MediaLibraryModal";
+import { TableEditorModal } from "./TableEditorModal";
 
 type ViewMode = "edit" | "split" | "preview";
 
@@ -60,6 +60,9 @@ export function MarkdownEditor({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [view, setView] = useState<ViewMode>("split");
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
+  const [tableInitial, setTableInitial] = useState<string | undefined>(undefined);
+  const [tableReplaceRange, setTableReplaceRange] = useState<{ start: number; end: number } | null>(null);
 
   const wordCount = useMemo(() => {
     const trimmed = value.trim();
@@ -166,11 +169,50 @@ export function MarkdownEditor({
     if (!el) return;
     const s = el.selectionStart ?? 0;
     const e = el.selectionEnd ?? 0;
-    const snippet = `\n| 标题 | 标题 |\n| --- | --- |\n| 内容 | 内容 |\n`;
-    const next = `${value.slice(0, s)}${snippet}${value.slice(e)}`;
-    const cellStart = s + 3;
-    const cellEnd = cellStart + 2;
-    setWithSelection(next, cellStart, cellEnd);
+
+    // Prefer selected block; otherwise try to detect a surrounding table at cursor.
+    const selected = value.slice(s, e);
+    let start = s;
+    let end = e;
+    let initial = selected.trim() ? selected : "";
+
+    if (!initial) {
+      const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+      const lineEndIdx = value.indexOf("\n", s);
+      const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx;
+      const currentLine = value.slice(lineStart, lineEnd);
+      const looksLikeTableLine = (line: string) => (line.match(/\|/g)?.length ?? 0) >= 2;
+
+      if (looksLikeTableLine(currentLine)) {
+        // Expand up/down to capture the table block.
+        let upStart = lineStart;
+        let downEnd = lineEnd;
+
+        while (upStart > 0) {
+          const prevEnd = upStart - 1;
+          const prevStart = value.lastIndexOf("\n", prevEnd - 1) + 1;
+          const prevLine = value.slice(prevStart, prevEnd);
+          if (!looksLikeTableLine(prevLine)) break;
+          upStart = prevStart;
+        }
+
+        while (downEnd < value.length) {
+          const nextEndIdx = value.indexOf("\n", downEnd + 1);
+          const nextEnd = nextEndIdx === -1 ? value.length : nextEndIdx;
+          const nextLine = value.slice(downEnd + 1, nextEnd);
+          if (!looksLikeTableLine(nextLine)) break;
+          downEnd = nextEnd;
+        }
+
+        start = upStart;
+        end = downEnd;
+        initial = value.slice(start, end).trim();
+      }
+    }
+
+    setTableReplaceRange({ start, end });
+    setTableInitial(initial || undefined);
+    setTableOpen(true);
   };
 
   const applyHr = () => {
@@ -331,7 +373,7 @@ export function MarkdownEditor({
               overflow: "auto",
             }}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{value || ""}</ReactMarkdown>
+            <Markdown value={value || ""} />
             {!value.trim() ? <div className="muted">预览区：开始输入内容吧。</div> : null}
           </div>
         ) : null}
@@ -346,6 +388,23 @@ export function MarkdownEditor({
         open={mediaOpen}
         onClose={() => setMediaOpen(false)}
         onSelect={(url) => insertImageUrl(url)}
+      />
+
+      <TableEditorModal
+        open={tableOpen}
+        onClose={() => setTableOpen(false)}
+        initialMarkdown={tableInitial}
+        onInsert={(markdown) => {
+          const el = textareaRef.current;
+          if (!el) return;
+          const range = tableReplaceRange ?? { start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0 };
+          const prefix = value.slice(0, range.start);
+          const suffix = value.slice(range.end);
+          const snippet = `\n${markdown}\n`;
+          const next = `${prefix}${snippet}${suffix}`;
+          const cursor = prefix.length + snippet.length;
+          setWithSelection(next, cursor, cursor);
+        }}
       />
     </div>
   );

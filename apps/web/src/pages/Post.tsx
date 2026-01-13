@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Link, useParams } from "react-router-dom";
 import { MdDateRange, MdLabel, MdFolder } from "react-icons/md";
 
 import { api, Post } from "../api";
+import { Markdown } from "../components/Markdown";
 import { buildToc } from "../markdown";
 import { useSite } from "../site";
 
@@ -114,8 +113,8 @@ export function PostPage() {
       <div className="main-content">
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="card markdown">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
+            <Markdown
+              value={post.contentMd}
               components={{
                 h1: ({ children }) => {
                   const id = nextHeadingId();
@@ -130,9 +129,7 @@ export function PostPage() {
                   return <h3 id={id}>{children}</h3>;
                 },
               }}
-            >
-              {post.contentMd}
-            </ReactMarkdown>
+            />
           </div>
         </div>
 
