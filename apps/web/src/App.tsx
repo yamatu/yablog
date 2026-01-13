@@ -12,7 +12,7 @@ import {
 } from "./pages/ListPage";
 import { HomePage } from "./pages/Home";
 import { PostPage } from "./pages/Post";
-import { AdminEditorPage, AdminIndexPage, AdminLoginPage } from "./pages/admin/Admin";
+import { AdminEditorPage, AdminIndexPage, AdminLoginPage, AdminSettingsPage } from "./pages/admin/Admin";
 
 export function App() {
   return (
@@ -33,6 +33,7 @@ export function App() {
           <Route path="/admin" element={<AdminIndexPage />} />
           <Route path="/admin/new" element={<AdminEditorPage mode="new" />} />
           <Route path="/admin/edit/:id" element={<AdminEditorPage mode="edit" />} />
+          <Route path="/admin/settings" element={<AdminSettingsPage />} />
 
           <Route path="*" element={<HomePage />} />
         </Routes>
@@ -40,4 +41,3 @@ export function App() {
     </BrowserRouter>
   );
 }
-

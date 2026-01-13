@@ -104,6 +104,18 @@ export const getUserByUsername = (db: Db, username: string) => {
     | undefined;
 };
 
+export const getUserById = (db: Db, id: number) => {
+  return db
+    .prepare(
+      "SELECT id, username, password_hash as passwordHash, created_at as createdAt FROM users WHERE id = ?",
+    )
+    .get(id) as
+    | (User & {
+        passwordHash: string;
+      })
+    | undefined;
+};
+
 export const hasAnyUsers = (db: Db) => {
   const row = db.prepare("SELECT COUNT(1) as c FROM users").get() as { c: number };
   return row.c > 0;

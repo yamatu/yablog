@@ -100,4 +100,24 @@ export const api = {
 
   adminDeletePost: (id: number) =>
     json<{ ok: true }>(`/api/admin/posts/${id}`, { method: "DELETE" }),
+
+  adminUpdateAccount: (payload: {
+    currentPassword: string;
+    newUsername?: string;
+    newPassword?: string;
+  }) =>
+    json<{ ok: true; user: User }>("/api/admin/account", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminRestoreBackup: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return json<{ ok: true; restarting: boolean }>("/api/admin/restore", {
+      method: "POST",
+      body: fd,
+    });
+  },
 };
