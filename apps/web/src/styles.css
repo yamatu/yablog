@@ -240,6 +240,77 @@ a:hover {
   gap: 15px;
 }
 
+.navToggle {
+  display: none;
+}
+
+.navMobile {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  z-index: 99;
+  transform: translateY(-10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.2s ease;
+}
+
+.navMobile.open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.navMobileInner {
+  background: var(--nav-bg);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  padding: 14px 15px 18px;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+}
+
+.navMobileLinks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.navMobileLinks a {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg2) 70%, transparent);
+}
+
+.mobileSearch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: color-mix(in oklab, var(--bg2) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 6px 10px;
+}
+
+.mobileSearch input {
+  border: none;
+  background: transparent;
+  padding: 8px 6px;
+}
+
+.mobileSearch input:focus {
+  box-shadow: none;
+}
+
+.mobileSearch .iconButton {
+  font-size: 20px;
+  padding: 6px;
+}
+
 .iconButton {
   background: transparent;
   border: none;
@@ -253,6 +324,18 @@ a:hover {
   transition: transform 0.3s;
   color: inherit;
   /* Allow color to be controlled by nav state */
+}
+
+@media (max-width: 820px) {
+  .navLinks {
+    display: none;
+  }
+  .navRight .search {
+    display: none;
+  }
+  .navToggle {
+    display: inline-flex;
+  }
 }
 
 .iconButton:hover {
@@ -452,6 +535,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
+  gap: 10px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
@@ -522,6 +606,12 @@ a:hover {
   .sidebar {
     width: 100%;
     position: static;
+  }
+
+  /* Post page: disable sticky TOC on mobile */
+  .sidebar .widget[style*="position: sticky"] {
+    position: static !important;
+    top: auto !important;
   }
 
   /* Sidebar stacks on mobile, no sticky needed */
@@ -887,6 +977,24 @@ button:hover,
 .adminRoot .card:hover,
 .adminRoot .glass:hover {
   transform: none;
+}
+
+@media (max-width: 900px) {
+  .adminRoot {
+    padding: 18px 12px !important;
+  }
+  .adminRoot .glass {
+    padding: 18px !important;
+  }
+  .adminEditorColumns {
+    grid-template-columns: 1fr !important;
+  }
+  .adminNavLinkRow {
+    grid-template-columns: 1fr !important;
+  }
+  .adminNavLinkRow > * {
+    width: 100%;
+  }
 }
 
 /* Markdown & Footer */

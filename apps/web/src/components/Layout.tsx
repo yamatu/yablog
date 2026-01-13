@@ -9,6 +9,8 @@ import {
   MdLabel,
   MdLightMode,
   MdLink,
+  MdMenu,
+  MdClose,
   MdSearch,
 } from "react-icons/md";
 
@@ -24,6 +26,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [q, setQ] = useState(initial);
   const [theme, setTheme] = useState<Theme>("light");
   const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   // Check if we are in admin section
   const isAdmin = location.pathname.startsWith("/admin");
@@ -45,6 +48,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
     const query = q.trim();
+    setMobileOpen(false);
     navigate(query ? `/search?q=${encodeURIComponent(query)}` : "/");
   };
 
@@ -54,6 +58,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     applyTheme(next);
     saveTheme(next);
   };
+
+  useEffect(() => {
+    // Close mobile menu on route change
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   // If admin, render just children (admin pages have their own layout)
   if (isAdmin) {
@@ -133,6 +142,49 @@ export function Layout({ children }: { children: React.ReactNode }) {
             >
               {theme === "dark" ? <MdLightMode /> : <MdDarkMode />}
             </button>
+            <button
+              type="button"
+              className="iconButton navToggle"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label="Toggle Menu"
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <MdClose /> : <MdMenu />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className={`navMobile ${mobileOpen ? "open" : ""}`}>
+        <div className="container navMobileInner">
+          <form className="search mobileSearch" onSubmit={onSearch}>
+            <button type="submit" className="iconButton" aria-label="Search">
+              <MdSearch />
+            </button>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索..." />
+          </form>
+
+          <div className="navMobileLinks">
+            {navLinks.map((item) => {
+              const isExternal = item.path.startsWith("http://") || item.path.startsWith("https://");
+              const content = (
+                <span className="navLinkInner">
+                  <span className="navIcon" aria-hidden="true">
+                    {iconFor(item.icon)}
+                  </span>
+                  <span>{item.label}</span>
+                </span>
+              );
+              return isExternal ? (
+                <a key={`${item.label}:${item.path}`} href={item.path} target="_blank" rel="noreferrer">
+                  {content}
+                </a>
+              ) : (
+                <NavLink key={`${item.label}:${item.path}`} to={item.path}>
+                  {content}
+                </NavLink>
+              );
+            })}
           </div>
         </div>
       </div>

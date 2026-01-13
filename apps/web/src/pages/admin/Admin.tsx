@@ -379,7 +379,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+          <div className="adminEditorColumns" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
             {/* Main Editor */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <MarkdownEditor value={contentMd} onChange={setContentMd} placeholder="开始写作..." minHeight={600} />
@@ -746,6 +746,7 @@ export function AdminSettingsPage() {
                     {siteDraft.nav.links.map((item, i) => (
                       <div
                         key={`${item.path}-${i}`}
+                        className="adminNavLinkRow"
                         style={{
                           display: "grid",
                           gridTemplateColumns: "1.1fr 1.4fr 1fr auto",
