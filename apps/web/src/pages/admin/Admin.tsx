@@ -445,6 +445,7 @@ export function AdminMediaPage() {
         <div style={{ height: 16 }} />
         <MediaLibraryPanel
           showClose={false}
+          containerStyle={{ width: "100%", maxHeight: "none" }}
           onSelect={async (url) => {
             try {
               await navigator.clipboard.writeText(url);

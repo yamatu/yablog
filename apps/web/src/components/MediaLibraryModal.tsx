@@ -28,11 +28,13 @@ export function MediaLibraryPanel({
   onRequestClose,
   showClose = true,
   autoCloseOnSelect = false,
+  containerStyle,
 }: {
   onSelect: (url: string) => void;
   onRequestClose?: () => void;
   showClose?: boolean;
   autoCloseOnSelect?: boolean;
+  containerStyle?: React.CSSProperties;
 }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [q, setQ] = useState("");
@@ -72,7 +74,15 @@ export function MediaLibraryPanel({
   }, [items, q]);
 
   return (
-    <div className="glass" style={{ width: "min(1100px, 96vw)", maxHeight: "90vh", overflow: "auto" }}>
+    <div
+      className="glass"
+      style={{
+        width: "100%",
+        maxWidth: "100%",
+        overflow: "auto",
+        ...containerStyle,
+      }}
+    >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>图库</div>
@@ -289,6 +299,7 @@ export function MediaLibraryModal({
           onRequestClose={onClose}
           showClose
           autoCloseOnSelect
+          containerStyle={{ width: "min(1100px, 96vw)", maxHeight: "90vh" }}
         />
       </div>
     </div>,
