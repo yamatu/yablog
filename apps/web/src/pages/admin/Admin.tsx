@@ -172,17 +172,17 @@ function AdminDashboard({ user }: { user: User }) {
 
       <div style={{ display: "flex", flexDirection: 'column', gap: 10 }}>
         {items.map((p) => (
-          <div key={p.id} className="card" style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 0 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{p.title}</div>
-              <div className="meta" style={{ display: 'flex', gap: 8, fontSize: 12 }}>
+          <div key={p.id} className="card adminPostRow" style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 0 }}>
+            <div className="adminPostMain" style={{ flex: 1, minWidth: 0 }}>
+              <div className="adminPostTitle" style={{ fontWeight: 600, fontSize: 16, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+              <div className="meta adminPostMeta" style={{ display: 'flex', gap: 8, fontSize: 12, flexWrap: "wrap" }}>
                 <span className={`pill ${p.status === 'published' ? 'active' : ''}`} style={{ color: p.status === 'published' ? 'green' : 'orange' }}>{p.status === 'published' ? '已发布' : '草稿'}</span>
                 {p.featured ? <span className="pill" style={{ color: 'var(--accent)' }}>置顶</span> : null}
                 <span className="pill">排序 {p.sortOrder ?? 0}</span>
-                <span className="muted">/{p.slug}</span>
+                <span className="muted adminPostSlug">/{p.slug}</span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="adminPostActions" style={{ display: "flex", gap: 10 }}>
               <button
                 onClick={async () => {
                   await api.adminUpdatePostOrder(p.id, { featured: !Boolean(p.featured) });

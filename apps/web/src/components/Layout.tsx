@@ -64,6 +64,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setMobileOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 820) setMobileOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   // If admin, render just children (admin pages have their own layout)
   if (isAdmin) {
     return <>{children}</>;

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { api } from "../api";
 import { Markdown } from "../components/Markdown";
+import { Sidebar } from "../components/Sidebar";
 import { useSite } from "../site";
 
 export function AboutPage() {
@@ -38,24 +39,23 @@ export function AboutPage() {
         <h1 className="page-banner-title">{about?.title ?? "关于"}</h1>
       </div>
 
-        <div className="container content-layer">
-          <div className="glass content">
-          {about ? (
-            <div className="markdown">
+      <div className="main-content">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="card markdown">
+            {about ? (
               <Markdown value={about.contentMd} />
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: 50 }}>
-              <div className="muted">
-                {err ? `加载失败（${err}）` : "你还没有设置关于页内容。"}
+            ) : (
+              <div style={{ textAlign: "center", padding: 40 }}>
+                <div className="muted">{err ? `加载失败（${err}）` : "你还没有设置关于页内容。"}</div>
+                <div style={{ height: 16 }} />
+                <Link to="/admin" className="pill">
+                  去后台创建
+                </Link>
               </div>
-              <div style={{ height: 20 }} />
-              <Link to="/admin" className="btnPrimary">
-                去后台创建
-              </Link>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+        <Sidebar />
       </div>
     </div>
   );

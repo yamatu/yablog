@@ -311,6 +311,12 @@ a:hover {
   padding: 6px;
 }
 
+@media (min-width: 821px) {
+  .navMobile {
+    display: none;
+  }
+}
+
 .iconButton {
   background: transparent;
   border: none;
@@ -994,6 +1000,36 @@ button:hover,
   }
   .adminNavLinkRow > * {
     width: 100%;
+  }
+
+  .adminPostRow {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px;
+    padding: 14px 14px !important;
+  }
+
+  .adminPostTitle {
+    font-size: 15px !important;
+    white-space: normal !important;
+    line-height: 1.35;
+  }
+
+  .adminPostSlug {
+    word-break: break-all;
+  }
+
+  .adminPostActions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px !important;
+  }
+
+  .adminPostActions .pill,
+  .adminPostActions button {
+    padding: 8px 10px !important;
+    min-height: 34px !important;
+    font-size: 13px !important;
   }
 }
 
