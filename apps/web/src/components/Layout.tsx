@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   MdArchive,
@@ -27,6 +27,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const lastVisibleTitleRef = useRef<string>("YaBlog");
 
   // Check if we are in admin section
   const isAdmin = location.pathname.startsWith("/admin");
@@ -103,6 +104,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
       "{year}",
       String(new Date().getFullYear()),
     );
+  const tabTitle = site?.tab?.title?.trim() || brandText || "YaBlog";
+  const awayTitle = site?.tab?.awayTitle?.trim() || tabTitle;
+  const faviconUrl = site?.tab?.faviconUrl?.trim() || "";
+
+  useEffect(() => {
+    // Update favicon (client-side) without rebuild
+    if (!faviconUrl) return;
+    const head = document.head;
+    const links = Array.from(head.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]'));
+    const link = links[0] ?? document.createElement("link");
+    link.rel = "icon";
+    link.href = faviconUrl;
+    if (!links[0]) head.appendChild(link);
+  }, [faviconUrl]);
+
+  useEffect(() => {
+    // Set default title on navigation when visible
+    if (document.visibilityState === "visible") {
+      document.title = tabTitle;
+      lastVisibleTitleRef.current = tabTitle;
+    }
+  }, [location.pathname, tabTitle]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        lastVisibleTitleRef.current = document.title || tabTitle;
+        document.title = awayTitle;
+      } else {
+        document.title = lastVisibleTitleRef.current || tabTitle;
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [awayTitle, tabTitle]);
 
   return (
     <>

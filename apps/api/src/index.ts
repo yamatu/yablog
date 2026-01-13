@@ -359,6 +359,11 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
         )
         .default([]),
     }),
+    tab: z.object({
+      title: z.string().min(1).max(60),
+      awayTitle: z.string().min(1).max(80),
+      faviconUrl: z.string().max(2000).default(""),
+    }),
     footer: z.object({
       text: z.string().min(1).max(300),
     }),

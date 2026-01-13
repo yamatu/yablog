@@ -22,6 +22,11 @@ export type SiteSettings = {
     brandText: string;
     links: { label: string; path: string; icon: string }[];
   };
+  tab: {
+    title: string;
+    awayTitle: string;
+    faviconUrl: string;
+  };
   footer: {
     text: string;
   };

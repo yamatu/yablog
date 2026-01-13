@@ -839,6 +839,31 @@ export function AdminSettingsPage() {
               </div>
 
               <div>
+                <div className="widget-title">浏览器标签栏（Title / Favicon）</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <input
+                    value={siteDraft.tab.title}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, title: e.target.value } })}
+                    placeholder="标签页标题（显示在浏览器最上方）"
+                  />
+                  <input
+                    value={siteDraft.tab.awayTitle}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, awayTitle: e.target.value } })
+                    }
+                    placeholder="用户切走/最小化时的标题"
+                  />
+                  <ImageField
+                    label="Favicon 图标（可留空）"
+                    value={siteDraft.tab.faviconUrl}
+                    onChange={(v) => setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, faviconUrl: v } })}
+                    help="建议使用正方形 PNG/WebP（32x32 或 64x64）。也支持 /uploads/..."
+                  />
+                  <div className="muted">当用户不在当前网页（标签页不可见）时，会自动把标题切换为“离开标题”。</div>
+                </div>
+              </div>
+
+              <div>
                 <div className="widget-title">底部 Footer</div>
                 <div style={{ display: "grid", gap: 10 }}>
                   <textarea
