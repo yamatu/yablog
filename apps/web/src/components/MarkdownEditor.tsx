@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import {
   MdCheckBox,
   MdCode,
+  MdCollections,
   MdDataObject,
   MdEdit,
   MdFormatBold,
@@ -22,6 +23,8 @@ import {
   MdViewSidebar,
   MdVisibility,
 } from "react-icons/md";
+
+import { MediaLibraryModal } from "./MediaLibraryModal";
 
 type ViewMode = "edit" | "split" | "preview";
 
@@ -56,6 +59,7 @@ export function MarkdownEditor({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [view, setView] = useState<ViewMode>("split");
+  const [mediaOpen, setMediaOpen] = useState(false);
 
   const wordCount = useMemo(() => {
     const trimmed = value.trim();
@@ -128,6 +132,18 @@ export function MarkdownEditor({
     const urlStart = s + 3 + alt.length + 2;
     const urlEnd = urlStart + url.length;
     setWithSelection(next, urlStart, urlEnd);
+  };
+
+  const insertImageUrl = (url: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const s = el.selectionStart ?? 0;
+    const e = el.selectionEnd ?? 0;
+    const alt = value.slice(s, e) || "图片";
+    const snippet = `![${alt}](${url})`;
+    const next = `${value.slice(0, s)}${snippet}${value.slice(e)}`;
+    const cursor = s + snippet.length;
+    setWithSelection(next, cursor, cursor);
   };
 
   const applyCodeBlock = () => {
@@ -207,6 +223,14 @@ export function MarkdownEditor({
           </button>
           <button type="button" className="toolBtn" onClick={applyImage} data-tooltip="图片">
             <MdImage />
+          </button>
+          <button
+            type="button"
+            className="toolBtn"
+            onClick={() => setMediaOpen(true)}
+            data-tooltip="图库图片"
+          >
+            <MdCollections />
           </button>
         </div>
         <div className="toolDivider" />
@@ -317,6 +341,12 @@ export function MarkdownEditor({
         <span className="pill">字数：{wordCount}</span>
         <span className="pill">GFM：表格 / 任务列表 / 删除线</span>
       </div>
+
+      <MediaLibraryModal
+        open={mediaOpen}
+        onClose={() => setMediaOpen(false)}
+        onSelect={(url) => insertImageUrl(url)}
+      />
     </div>
   );
 }

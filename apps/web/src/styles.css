@@ -800,6 +800,63 @@ button:hover,
   color: var(--accent);
 }
 
+/* Admin button consistency */
+.adminRoot button,
+.adminRoot .pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.adminRoot button {
+  min-height: 40px;
+}
+
+.adminRoot .pill {
+  min-height: 36px;
+}
+
+.adminRoot button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.adminRoot .btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: color-mix(in oklab, var(--accent) 70%, var(--border));
+}
+
+.adminRoot .btn-primary:hover {
+  color: white;
+  border-color: color-mix(in oklab, var(--accent) 85%, var(--border));
+}
+
+.adminRoot .btn-danger {
+  background: #ff4d4f;
+  color: white;
+  border-color: transparent;
+}
+
+.adminRoot .btn-danger:hover {
+  color: white;
+  border-color: transparent;
+}
+
+.adminRoot .btn-ghost {
+  background: transparent;
+}
+
+.adminRoot .card:hover,
+.adminRoot .glass:hover {
+  transform: none;
+}
+
 /* Markdown & Footer */
 .markdown {
   padding: 40px;

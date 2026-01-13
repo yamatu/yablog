@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } 
 
 import { api, Post, User } from "../../api";
 import { ImageField } from "../../components/ImageField";
+import { MediaLibraryPanel } from "../../components/MediaLibraryModal";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useSite } from "../../site";
 
@@ -33,7 +34,7 @@ function useMe() {
 
 // Wrap admin pages in a simple centered container since we removed the public layout
 const AdminLayoutWrapper = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "40px 20px" }}>
+  <div className="adminRoot" style={{ minHeight: "100vh", background: "var(--bg)", padding: "40px 20px" }}>
     <div className="container" style={{ maxWidth: 1000 }}>
       {children}
     </div>
@@ -78,20 +79,19 @@ export function AdminLoginPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
+    <div className="adminRoot" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
       <div className="glass content" style={{ width: "100%", maxWidth: 400, padding: 40 }}>
         <h2 style={{ marginTop: 0, textAlign: 'center' }}>后台登录</h2>
         <div style={{ height: 20 }} />
         <form onSubmit={onSubmit} style={{ display: "grid", gap: 20 }}>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="用户名" style={{ padding: 12 }} />
+          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="用户名" />
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="密码"
-            style={{ padding: 12 }}
           />
-          <button disabled={loading} style={{ padding: 12, fontSize: 16 }}>{loading ? "登录中…" : "登录"}</button>
+          <button className="btn-primary" disabled={loading}>{loading ? "登录中…" : "登录"}</button>
           {err ? <div className="muted" style={{ textAlign: "center", color: "red" }}>{err}</div> : null}
         </form>
       </div>
@@ -136,9 +136,10 @@ function AdminDashboard({ user }: { user: User }) {
           <div className="muted">欢迎回来，{user.username}</div>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
-          <button onClick={() => navigate("/admin/new")}>+ 新建文章</button>
-          <button onClick={() => navigate("/admin/settings")} style={{ background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)' }}>设置</button>
-          <button onClick={onLogout} style={{ background: 'transparent', color: 'var(--muted2)', border: 'none', boxShadow: 'none' }}>退出</button>
+          <button className="btn-primary" onClick={() => navigate("/admin/new")}>+ 新建文章</button>
+          <button className="btn-ghost" onClick={() => navigate("/admin/media")}>图库</button>
+          <button className="btn-ghost" onClick={() => navigate("/admin/settings")}>设置</button>
+          <button className="btn-ghost" onClick={onLogout}>退出</button>
         </div>
       </div>
 
@@ -321,12 +322,12 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
 	                预览页面
 	              </Link>
 	            )}
-	            <button onClick={() => onSave()} disabled={saving} style={{ padding: "0 24px" }}>
-	              {saving ? "保存中…" : "保存更改"}
-	            </button>
-              <button onClick={() => onSave({ publish: true })} disabled={saving} style={{ padding: "0 24px" }}>
-                {saving ? "保存中…" : "保存并发布"}
-              </button>
+            <button className="btn-ghost" onClick={() => onSave()} disabled={saving}>
+              {saving ? "保存中…" : "保存更改"}
+            </button>
+            <button className="btn-primary" onClick={() => onSave({ publish: true })} disabled={saving}>
+              {saving ? "保存中…" : "保存并发布"}
+            </button>
 	          </div>
 	        </div>
 
@@ -401,7 +402,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
 	              </div>
 
               {mode === "edit" ? (
-                <button onClick={onDelete} className="btn" style={{ background: '#ff4d4f', color: 'white', justifyContent: 'center' }}>
+                <button onClick={onDelete} className="btn-danger" style={{ justifyContent: "center" }}>
                   删除此文章
                 </button>
               ) : null}
@@ -412,6 +413,49 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
           {err ? <div className="card" style={{ padding: 15, color: 'red', background: '#fff2f0', border: '1px solid #ffccc7' }}>错误：{err}</div> : null}
 
         </div>
+      </div>
+    </AdminLayoutWrapper>
+  );
+}
+
+export function AdminMediaPage() {
+  const { user, loading } = useMe();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  if (loading) return <div className="container" style={{ padding: "26px 0" }}>加载中…</div>;
+  if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+
+  return (
+    <AdminLayoutWrapper>
+      <div className="glass content">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h2 style={{ margin: 0 }}>图库</h2>
+            <div className="muted">管理站点上传的图片（支持替换保持 URL 不变）</div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn-ghost" onClick={() => navigate("/admin/settings")}>防盗链设置</button>
+            <button className="btn-ghost" onClick={() => navigate("/admin")}>返回控制台</button>
+          </div>
+        </div>
+
+        {msg ? <div style={{ marginTop: 14, color: "green" }}>{msg}</div> : null}
+        <div style={{ height: 16 }} />
+        <MediaLibraryPanel
+          showClose={false}
+          onSelect={async (url) => {
+            try {
+              await navigator.clipboard.writeText(url);
+              setMsg(`已复制：${url}`);
+              setTimeout(() => setMsg(null), 1800);
+            } catch {
+              setMsg(url);
+              setTimeout(() => setMsg(null), 1800);
+            }
+          }}
+        />
       </div>
     </AdminLayoutWrapper>
   );
@@ -577,7 +621,10 @@ export function AdminSettingsPage() {
       <div className="glass content">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
           <h2 style={{ margin: 0 }}>系统设置</h2>
-          <button onClick={() => navigate("/admin")}>返回控制台</button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn-ghost" onClick={() => navigate("/admin/media")}>图库</button>
+            <button className="btn-ghost" onClick={() => navigate("/admin")}>返回控制台</button>
+          </div>
         </div>
 
         <div className="grid">
@@ -588,7 +635,7 @@ export function AdminSettingsPage() {
               <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="新用户名 (留空不改)" />
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="新密码 (留空不改, 至少8位)" />
               <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="确认新密码" />
-              <button onClick={onSave} disabled={saving} style={{ marginTop: 10 }}>
+              <button className="btn-primary" onClick={onSave} disabled={saving} style={{ marginTop: 10 }}>
                 {saving ? "保存中..." : "保存更改"}
               </button>
               {msg ? <span style={{ color: 'green' }}>{msg}</span> : null}
@@ -886,7 +933,7 @@ export function AdminSettingsPage() {
               </div>
 
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                <button onClick={saveSite} disabled={siteBusy}>
+                <button className="btn-primary" onClick={saveSite} disabled={siteBusy}>
                   {siteBusy ? "保存中…" : "保存站点设置"}
                 </button>
                 {siteMsg ? <span style={{ color: "green" }}>{siteMsg}</span> : null}

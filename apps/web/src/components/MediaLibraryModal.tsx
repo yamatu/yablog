@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { MdClose, MdContentCopy, MdDelete, MdFileUpload, MdSearch } from "react-icons/md";
 
 import { api } from "../api";
@@ -22,14 +23,16 @@ function prettyBytes(bytes: number) {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-export function MediaLibraryModal({
-  open,
-  onClose,
+export function MediaLibraryPanel({
   onSelect,
+  onRequestClose,
+  showClose = true,
+  autoCloseOnSelect = false,
 }: {
-  open: boolean;
-  onClose: () => void;
   onSelect: (url: string) => void;
+  onRequestClose?: () => void;
+  showClose?: boolean;
+  autoCloseOnSelect?: boolean;
 }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [q, setQ] = useState("");
@@ -43,7 +46,6 @@ export function MediaLibraryModal({
   };
 
   useEffect(() => {
-    if (!open) return;
     let alive = true;
     (async () => {
       try {
@@ -61,7 +63,7 @@ export function MediaLibraryModal({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -69,37 +71,22 @@ export function MediaLibraryModal({
     return items.filter((it) => it.name.toLowerCase().includes(needle));
   }, [items, q]);
 
-  if (!open) return null;
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.55)",
-        zIndex: 80,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-      }}
-    >
-      <div
-        className="glass content"
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: "min(1100px, 96vw)", maxHeight: "90vh", overflow: "auto" }}
-      >
+    <div className="glass" style={{ width: "min(1100px, 96vw)", maxHeight: "90vh", overflow: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>图库</div>
             <div className="muted">上传 / 选择 / 替换 / 删除，你的站点图片都会存放在这里</div>
           </div>
-          <button onClick={onClose} title="关闭" style={{ background: "transparent", border: "none", boxShadow: "none" }}>
-            <MdClose size={22} />
-          </button>
+          {showClose ? (
+            <button
+              onClick={onRequestClose}
+              title="关闭"
+              style={{ background: "transparent", border: "none", boxShadow: "none" }}
+            >
+              <MdClose size={22} />
+            </button>
+          ) : null}
         </div>
 
         <div style={{ height: 16 }} />
@@ -163,7 +150,7 @@ export function MediaLibraryModal({
               <button
                 onClick={() => {
                   onSelect(it.url);
-                  onClose();
+                  if (autoCloseOnSelect) onRequestClose?.();
                 }}
                 title="选择此图片"
                 style={{
@@ -264,8 +251,47 @@ export function MediaLibraryModal({
             暂无图片
           </div>
         ) : null}
-      </div>
     </div>
   );
 }
 
+export function MediaLibraryModal({
+  open,
+  onClose,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (url: string) => void;
+}) {
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      className="adminRoot"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.55)",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()}>
+        <MediaLibraryPanel
+          onSelect={onSelect}
+          onRequestClose={onClose}
+          showClose
+          autoCloseOnSelect
+        />
+      </div>
+    </div>,
+    document.body,
+  );
+}
