@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { api, Post, User } from "../../api";
+import { MarkdownEditor } from "../../components/MarkdownEditor";
 
 function useMe() {
   const [user, setUser] = useState<User | null>(null);
@@ -313,12 +314,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
             </label>
           </div>
 
-          <textarea
-            value={contentMd}
-            onChange={(e) => setContentMd(e.target.value)}
-            placeholder="Markdown 内容"
-            style={{ minHeight: 340, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
-          />
+          <MarkdownEditor value={contentMd} onChange={setContentMd} placeholder="Markdown 内容" minHeight={420} />
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={onSave} disabled={saving}>
