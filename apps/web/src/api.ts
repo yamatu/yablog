@@ -22,6 +22,9 @@ export type SiteSettings = {
     brandText: string;
     links: { label: string; path: string; icon: string }[];
   };
+  footer: {
+    text: string;
+  };
   home: {
     title: string;
     subtitle: string;

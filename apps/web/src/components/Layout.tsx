@@ -81,6 +81,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { label: "标签", path: "/tags", icon: "tag" },
           { label: "关于", path: "/about", icon: "info" },
         ];
+  const footerText =
+    (site?.footer?.text?.trim() || "© {year} YaBlog · Designed with Butterfly Style").replaceAll(
+      "{year}",
+      String(new Date().getFullYear()),
+    );
 
   return (
     <>
@@ -136,7 +141,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <div className="footer">
         <div className="container">
-          <p>© {new Date().getFullYear()} YaBlog · Designed with Butterfly Style</p>
+          <p>{footerText}</p>
         </div>
       </div>
     </>

@@ -247,10 +247,26 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
   const [tags, setTags] = useState("");
   const [categories, setCategories] = useState("");
   const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [publishedAtLocal, setPublishedAtLocal] = useState<string>("");
   const [featured, setFeatured] = useState(false);
   const [sortOrder, setSortOrder] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const toLocalInput = (iso: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const fromLocalInput = (value: string) => {
+    const v = value.trim();
+    if (!v) return null;
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString();
+  };
 
   useEffect(() => {
     if (mode === "new") return;
@@ -269,6 +285,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
           setTags(found.tags.join(","));
           setCategories(found.categories.join(","));
           setStatus(found.status);
+          setPublishedAtLocal(toLocalInput(found.publishedAt ?? null));
           setFeatured(Boolean(found.featured));
           setSortOrder(found.sortOrder ?? 0);
         }
@@ -286,6 +303,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
     setSaving(true);
     try {
       const nextStatus = opts?.publish ? "published" : status;
+      const publishedAt = fromLocalInput(publishedAtLocal);
       const payload = {
         title: title.trim(),
         slug: slug.trim() || undefined,
@@ -297,6 +315,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
         status: nextStatus,
         featured,
         sortOrder,
+        publishedAt,
       };
 
       if (mode === "new") {
@@ -401,9 +420,17 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
               </div>
 
 	              <div className="card" style={{ padding: 20 }}>
-	                <div className="widget-title">发布状态</div>
-	                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+                <div className="widget-title">发布状态</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
                     <div className="muted">当前状态：{status === "published" ? "已发布" : "草稿"}</div>
+                    <label style={{ display: "grid", gap: 6 }}>
+                      <span style={{ fontSize: 13, color: "var(--muted)" }}>发布时间（可留空，发布时自动取当前时间）</span>
+                      <input
+                        type="datetime-local"
+                        value={publishedAtLocal}
+                        onChange={(e) => setPublishedAtLocal(e.target.value)}
+                      />
+                    </label>
 	                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
 	                    <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} style={{ width: 'auto' }} />
 	                    <span>置顶文章 (首页置顶)</span>
@@ -807,6 +834,19 @@ export function AdminSettingsPage() {
                       + 添加导航标签
                     </button>
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="widget-title">底部 Footer</div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <textarea
+                    value={siteDraft.footer.text}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, footer: { ...siteDraft.footer, text: e.target.value } })}
+                    rows={3}
+                    placeholder="例如：© {year} YaBlog · Designed with Butterfly Style"
+                  />
+                  <div className="muted">支持占位符：{`{year}`} 会自动替换为当前年份。</div>
                 </div>
               </div>
 

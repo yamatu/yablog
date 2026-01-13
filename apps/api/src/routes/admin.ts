@@ -73,9 +73,7 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
     const payload = postPayloadSchema.parse(req.body);
     const slug = uniqueSlug(db, payload.slug ?? payload.title);
     const publishedAt =
-      payload.status === "published"
-        ? (payload.publishedAt ?? new Date().toISOString())
-        : null;
+      payload.publishedAt ?? (payload.status === "published" ? new Date().toISOString() : null);
 
     const postId = createPost(db, {
       title: payload.title,
@@ -106,9 +104,7 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
     const payload = postPayloadSchema.parse(req.body);
     const slug = uniqueSlug(db, payload.slug ?? payload.title, id);
     const publishedAt =
-      payload.status === "published"
-        ? (payload.publishedAt ?? new Date().toISOString())
-        : null;
+      payload.publishedAt ?? (payload.status === "published" ? new Date().toISOString() : null);
 
     updatePost(db, {
       id,

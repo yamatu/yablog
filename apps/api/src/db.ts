@@ -518,6 +518,9 @@ export type SiteSettings = {
     brandText: string;
     links: { label: string; path: string; icon: string }[];
   };
+  footer: {
+    text: string;
+  };
   home: {
     title: string;
     subtitle: string;
@@ -558,6 +561,9 @@ export const defaultSiteSettings = (): SiteSettings => ({
       { label: "标签", path: "/tags", icon: "tag" },
       { label: "关于", path: "/about", icon: "info" },
     ],
+  },
+  footer: {
+    text: "© {year} YaBlog · Designed with Butterfly Style",
   },
   home: {
     title: "YaBlog",
@@ -616,6 +622,9 @@ const mergeSiteSettings = (base: SiteSettings, incoming: any): SiteSettings => {
                   v.path.startsWith("https://")),
             )
         : base.nav.links,
+    },
+    footer: {
+      text: String(safe?.footer?.text ?? base.footer.text),
     },
     home: {
       title: String(safe?.home?.title ?? base.home.title),

@@ -359,6 +359,9 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
         )
         .default([]),
     }),
+    footer: z.object({
+      text: z.string().min(1).max(300),
+    }),
     home: z.object({
       title: z.string().min(1).max(80),
       subtitle: z.string().max(200),

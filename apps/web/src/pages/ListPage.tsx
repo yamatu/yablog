@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { api, Post } from "../api";
@@ -57,6 +57,29 @@ export function ArchivePage() {
   const limit = 12;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
+  const groups = useMemo(() => {
+    const map = new Map<string, Post[]>();
+    const keyFor = (p: Post) => {
+      const iso = p.publishedAt ?? p.updatedAt ?? p.createdAt;
+      const d = new Date(iso);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      return `${y}-${m}`;
+    };
+    for (const p of items) {
+      const k = keyFor(p);
+      const arr = map.get(k) ?? [];
+      arr.push(p);
+      map.set(k, arr);
+    }
+    return Array.from(map.entries()).map(([key, posts]) => ({ key, posts }));
+  }, [items]);
+
+  const groupTitle = (key: string) => {
+    const [y, m] = key.split("-");
+    return `${y} 年 ${m} 月`;
+  };
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -81,11 +104,20 @@ export function ArchivePage() {
       {err ? <div className="card" style={{ padding: 20 }}>加载失败：{err}</div> : null}
 
       <div className="card" style={{ padding: "26px" }}>
-        <div className="archiveGrid">
-          {items.map((p, i) => (
-            <PostCard key={p.id} post={p} index={i} variant="square" />
-          ))}
-        </div>
+        {groups.map((g) => (
+          <div key={g.key} style={{ marginBottom: 26 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{groupTitle(g.key)}</div>
+              <div className="muted">{g.posts.length} 篇</div>
+            </div>
+            <div style={{ height: 12 }} />
+            <div className="archiveGrid">
+              {g.posts.map((p, i) => (
+                <PostCard key={p.id} post={p} index={i} variant="square" />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="pager pagerFloat">
