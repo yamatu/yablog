@@ -14,8 +14,8 @@ export const config = {
   databasePath:
     process.env.DATABASE_PATH ?? path.resolve(process.cwd(), "data", "yablog.db"),
   jwtSecret: process.env.JWT_SECRET ?? "dev-only-change-me",
-  adminUsername: process.env.ADMIN_USERNAME ?? "admin",
-  adminPassword: process.env.ADMIN_PASSWORD ?? "admin",
+  adminUsername: process.env.ADMIN_USERNAME,
+  adminPassword: process.env.ADMIN_PASSWORD,
   cookieName: process.env.COOKIE_NAME ?? "yablog_token",
   cookieSecure: (process.env.COOKIE_SECURE ?? "0") === "1",
   webDistPath: process.env.WEB_DIST_PATH,

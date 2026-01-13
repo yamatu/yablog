@@ -35,7 +35,11 @@
 
 ## Quick Start (Docker)
 
-1) 修改 `docker-compose.yml` 里的账号密码和 `JWT_SECRET`
+1) 复制环境变量文件并修改账号密码与 `JWT_SECRET`
+
+```bash
+cp .env.example .env
+```
 
 2) 启动：
 
@@ -53,6 +57,7 @@ SQLite 数据会保存在本机的 `./data/yablog.db`（由 compose volume 挂�
 ## Local Dev (No Docker)
 
 ```bash
+cp .env.example .env
 npm install
 npm run dev
 ```
@@ -62,7 +67,7 @@ npm run dev
 
 ## Notes
 
-- 默认账号密码来自后端环境变量：`ADMIN_USERNAME` / `ADMIN_PASSWORD`（初次启动会自动创建管理员）
+- 初次启动会自动创建管理员账号（由 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 指定）
 - 生产环境请务必修改：`JWT_SECRET`，并在 HTTPS 场景设置 `COOKIE_SECURE=1`
 
 ## License

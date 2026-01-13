@@ -14,6 +14,12 @@ import { mountPublicRoutes } from "./routes/public.js";
 const db = openDb();
 initDb(db);
 
+if (!config.adminUsername || !config.adminPassword) {
+  // eslint-disable-next-line no-console
+  console.error("[yablog-api] ADMIN_USERNAME and ADMIN_PASSWORD must be set.");
+  process.exit(1);
+}
+
 if (!hasAnyUsers(db)) {
   ensureAdminUser(db, {
     username: config.adminUsername,
@@ -77,8 +83,5 @@ app.listen(config.port, () => {
   console.log(`[yablog-api] listening on :${config.port}`);
   if (config.jwtSecret === "dev-only-change-me") {
     console.warn("[yablog-api] WARNING: JWT_SECRET is using the default dev value.");
-  }
-  if (config.adminUsername === "admin" && config.adminPassword === "admin") {
-    console.warn("[yablog-api] WARNING: ADMIN_USERNAME/ADMIN_PASSWORD are using default values.");
   }
 });

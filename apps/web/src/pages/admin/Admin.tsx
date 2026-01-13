@@ -43,8 +43,8 @@ export function AdminLoginPage() {
   const [sp] = useSearchParams();
   const from = (location.state as any)?.from ?? sp.get("from") ?? "/admin";
 
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -66,7 +66,7 @@ export function AdminLoginPage() {
     <div className="container" style={{ padding: "26px 0 50px" }}>
       <div className="glass content" style={{ maxWidth: 520, margin: "0 auto" }}>
         <h2 style={{ marginTop: 0 }}>后台登录</h2>
-        <div className="muted">默认账号密码来自后端环境变量：ADMIN_USERNAME / ADMIN_PASSWORD</div>
+        <div className="muted">请输入后台账号密码</div>
         <div style={{ height: 16 }} />
         <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
           <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="用户名" />

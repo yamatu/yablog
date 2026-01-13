@@ -5,16 +5,14 @@ services:
     restart: unless-stopped
     ports:
       - "8787:8787"
+    env_file:
+      - .env
     environment:
       PORT: "8787"
       NODE_ENV: "production"
       DATABASE_PATH: "/data/yablog.db"
       WEB_DIST_PATH: "/app/apps/web/dist"
       COOKIE_SECURE: "0"
-      JWT_SECRET: "change-me-in-prod"
-      ADMIN_USERNAME: "admin"
-      ADMIN_PASSWORD: "admin"
       TZ: "Asia/Shanghai"
     volumes:
       - ./data:/data
-
