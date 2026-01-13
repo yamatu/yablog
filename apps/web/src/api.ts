@@ -18,6 +18,10 @@ export type Post = {
 export type User = { userId: number; username: string };
 
 export type SiteSettings = {
+  nav: {
+    brandText: string;
+    links: { label: string; path: string; icon: string }[];
+  };
   home: {
     title: string;
     subtitle: string;

@@ -7,6 +7,24 @@ import { MediaLibraryPanel } from "../../components/MediaLibraryModal";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useSite } from "../../site";
 
+const NAV_ICON_OPTIONS = [
+  { key: "home", label: "Home" },
+  { key: "archive", label: "Archive" },
+  { key: "tag", label: "Tag" },
+  { key: "category", label: "Category" },
+  { key: "info", label: "Info" },
+  { key: "search", label: "Search" },
+  { key: "link", label: "Link" },
+];
+
+const NAV_PATH_OPTIONS = [
+  { path: "/", label: "首页 /" },
+  { path: "/archive", label: "归档 /archive" },
+  { path: "/tags", label: "标签 /tags" },
+  { path: "/categories", label: "分类 /categories" },
+  { path: "/about", label: "关于 /about" },
+];
+
 function useMe() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -687,6 +705,111 @@ export function AdminSettingsPage() {
             <div className="muted">加载站点设置中…</div>
           ) : (
             <div style={{ display: "grid", gap: 22 }}>
+              <div>
+                <div className="widget-title">顶部导航栏</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <input
+                    value={siteDraft.nav.brandText}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, brandText: e.target.value } })}
+                    placeholder="左上角品牌文字（例如 YaBlog）"
+                  />
+
+                  <div className="muted">导航标签（可编辑文字与图标）</div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {siteDraft.nav.links.map((item, i) => (
+                      <div
+                        key={`${item.path}-${i}`}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1.1fr 1.4fr 1fr auto",
+                          gap: 10,
+                        }}
+                      >
+                        <input
+                          value={item.label}
+                          onChange={(e) => {
+                            const next = [...siteDraft.nav.links];
+                            next[i] = { ...next[i], label: e.target.value };
+                            setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                          }}
+                          placeholder="标签文字"
+                        />
+                        <select
+                          value={NAV_PATH_OPTIONS.some((p) => p.path === item.path) ? item.path : ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const next = [...siteDraft.nav.links];
+                            next[i] = { ...next[i], path: v || next[i].path };
+                            setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                          }}
+                          title="选择页面路径"
+                        >
+                          <option value="">自定义路径（在右侧输入）</option>
+                          {NAV_PATH_OPTIONS.map((p) => (
+                            <option key={p.path} value={p.path}>
+                              {p.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          value={item.path}
+                          onChange={(e) => {
+                            const next = [...siteDraft.nav.links];
+                            next[i] = { ...next[i], path: e.target.value };
+                            setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                          }}
+                          placeholder="/path 或 https://..."
+                          title="路径（内部用 / 开头，外链用 https://）"
+                        />
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <select
+                            value={item.icon}
+                            onChange={(e) => {
+                              const next = [...siteDraft.nav.links];
+                              next[i] = { ...next[i], icon: e.target.value };
+                              setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                            }}
+                            title="图标"
+                            style={{ width: 140 }}
+                          >
+                            {NAV_ICON_OPTIONS.map((opt) => (
+                              <option key={opt.key} value={opt.key}>
+                                {opt.label} ({opt.key})
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            onClick={() => {
+                              const next = siteDraft.nav.links.filter((_, idx) => idx !== i);
+                              setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                            }}
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() =>
+                        setSiteDraft({
+                          ...siteDraft,
+                          nav: {
+                            ...siteDraft.nav,
+                            links: [...siteDraft.nav.links, { label: "新标签", path: "/", icon: "link" }],
+                          },
+                        })
+                      }
+                    >
+                      + 添加导航标签
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <div className="widget-title">首页文案</div>
                 <div style={{ display: "grid", gap: 12 }}>

@@ -347,6 +347,18 @@ adminRouter.get("/site", (_req, res) => {
 
 adminRouter.put("/site", (req: AuthedRequest, res) => {
   const siteSchema = z.object({
+    nav: z.object({
+      brandText: z.string().min(1).max(32),
+      links: z
+        .array(
+          z.object({
+            label: z.string().min(1).max(24),
+            path: z.string().min(1).max(200),
+            icon: z.string().min(1).max(40),
+          }),
+        )
+        .default([]),
+    }),
     home: z.object({
       title: z.string().min(1).max(80),
       subtitle: z.string().max(200),

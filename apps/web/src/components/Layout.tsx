@@ -1,12 +1,24 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { MdDarkMode, MdLightMode, MdSearch } from "react-icons/md";
+import {
+  MdArchive,
+  MdDarkMode,
+  MdFolder,
+  MdHome,
+  MdInfo,
+  MdLabel,
+  MdLightMode,
+  MdLink,
+  MdSearch,
+} from "react-icons/md";
 
 import { applyTheme, getSavedTheme, getSystemTheme, saveTheme, Theme } from "../theme";
+import { useSite } from "../site";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { site } = useSite();
   const [sp] = useSearchParams();
   const initial = useMemo(() => sp.get("q") ?? "", [sp]);
   const [q, setQ] = useState(initial);
@@ -48,18 +60,57 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  const iconFor = (key: string) => {
+    const k = (key || "").toLowerCase();
+    if (k === "home") return <MdHome />;
+    if (k === "archive") return <MdArchive />;
+    if (k === "tag" || k === "tags") return <MdLabel />;
+    if (k === "category" || k === "categories") return <MdFolder />;
+    if (k === "info" || k === "about") return <MdInfo />;
+    if (k === "search") return <MdSearch />;
+    return <MdLink />;
+  };
+
+  const brandText = site?.nav?.brandText?.trim() || "YaBlog";
+  const navLinks =
+    site?.nav?.links?.length
+      ? site.nav.links
+      : [
+          { label: "首页", path: "/", icon: "home" },
+          { label: "归档", path: "/archive", icon: "archive" },
+          { label: "标签", path: "/tags", icon: "tag" },
+          { label: "关于", path: "/about", icon: "info" },
+        ];
+
   return (
     <>
       <div className={`nav ${isScrolled ? "scrolled" : "transparent"}`}>
         <div className="container navInner">
           <Link to="/" className="brand">
-            <span>YaBlog</span>
+            <span>{brandText}</span>
           </Link>
           <div className="navLinks">
-            <NavLink to="/">首页</NavLink>
-            <NavLink to="/archive">归档</NavLink>
-            <NavLink to="/tags">标签</NavLink>
-            <NavLink to="/about">关于</NavLink>
+            {navLinks.map((item) => {
+              const isExternal = item.path.startsWith("http://") || item.path.startsWith("https://");
+              const content = (
+                <span className="navLinkInner">
+                  <span className="navIcon" aria-hidden="true">
+                    {iconFor(item.icon)}
+                  </span>
+                  <span>{item.label}</span>
+                </span>
+              );
+
+              return isExternal ? (
+                <a key={`${item.label}:${item.path}`} href={item.path} target="_blank" rel="noreferrer">
+                  {content}
+                </a>
+              ) : (
+                <NavLink key={`${item.label}:${item.path}`} to={item.path}>
+                  {content}
+                </NavLink>
+              );
+            })}
           </div>
           <div className="navRight">
             <form className="search" onSubmit={onSearch}>

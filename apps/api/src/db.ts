@@ -514,6 +514,10 @@ export const updatePost = (
 };
 
 export type SiteSettings = {
+  nav: {
+    brandText: string;
+    links: { label: string; path: string; icon: string }[];
+  };
   home: {
     title: string;
     subtitle: string;
@@ -546,6 +550,15 @@ export type SiteSettings = {
 };
 
 export const defaultSiteSettings = (): SiteSettings => ({
+  nav: {
+    brandText: "YaBlog",
+    links: [
+      { label: "首页", path: "/", icon: "home" },
+      { label: "归档", path: "/archive", icon: "archive" },
+      { label: "标签", path: "/tags", icon: "tag" },
+      { label: "关于", path: "/about", icon: "info" },
+    ],
+  },
   home: {
     title: "YaBlog",
     subtitle: "Minimal · Elegant · Powerful",
@@ -584,6 +597,26 @@ export const defaultSiteSettings = (): SiteSettings => ({
 const mergeSiteSettings = (base: SiteSettings, incoming: any): SiteSettings => {
   const safe = typeof incoming === "object" && incoming ? incoming : {};
   return {
+    nav: {
+      brandText: String(safe?.nav?.brandText ?? base.nav.brandText),
+      links: Array.isArray(safe?.nav?.links)
+        ? safe.nav.links
+            .filter((v: any) => v && typeof v === "object")
+            .map((v: any) => ({
+              label: String(v.label ?? ""),
+              path: String(v.path ?? ""),
+              icon: String(v.icon ?? ""),
+            }))
+            .filter(
+              (v: any) =>
+                v.label &&
+                v.path &&
+                (v.path.startsWith("/") ||
+                  v.path.startsWith("http://") ||
+                  v.path.startsWith("https://")),
+            )
+        : base.nav.links,
+    },
     home: {
       title: String(safe?.home?.title ?? base.home.title),
       subtitle: String(safe?.home?.subtitle ?? base.home.subtitle),

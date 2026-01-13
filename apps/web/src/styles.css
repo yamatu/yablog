@@ -204,6 +204,20 @@ a:hover {
   font-weight: 600;
 }
 
+.navLinkInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  opacity: 0.9;
+}
+
 .navLinks a::after {
   content: "";
   position: absolute;
