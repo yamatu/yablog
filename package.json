@@ -1,0 +1,17 @@
+{
+  "name": "yablog",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @yablog/api & npm run dev -w @yablog/web",
+    "build": "npm run build -w @yablog/api && npm run build -w @yablog/web",
+    "start": "npm run start -w @yablog/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,25 @@
+node_modules
+.DS_Store
+
+# env
+.env
+.env.*
+
+# logs
+*.log
+npm-debug.log*
+
+# build outputs
+dist
+build
+.vite
+
+# sqlite
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# local data
+data
+
