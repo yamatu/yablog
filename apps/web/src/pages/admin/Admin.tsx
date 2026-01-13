@@ -261,10 +261,11 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
 
-  const onSave = async () => {
+  const onSave = async (opts?: { publish?: boolean }) => {
     setErr(null);
     setSaving(true);
     try {
+      const nextStatus = opts?.publish ? "published" : status;
       const payload = {
         title: title.trim(),
         slug: slug.trim() || undefined,
@@ -273,7 +274,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
         contentMd,
         tags: tags.split(",").map((s) => s.trim()).filter(Boolean),
         categories: categories.split(",").map((s) => s.trim()).filter(Boolean),
-        status,
+        status: nextStatus,
         featured,
         sortOrder,
       };
@@ -285,6 +286,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
         if (!id) throw new Error("missing id");
         await api.adminUpdatePost(id, payload);
       }
+      if (opts?.publish) setStatus("published");
     } catch (e: any) {
       setErr(e?.message ?? String(e));
     } finally {
@@ -304,25 +306,28 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
     }
   };
 
-  return (
-    <AdminLayoutWrapper>
-      <div className="glass content">
+	  return (
+	    <AdminLayoutWrapper>
+	      <div className="glass content">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <button onClick={() => navigate("/admin")} style={{ background: 'transparent', color: 'var(--muted)', padding: 0, boxShadow: 'none', marginBottom: 5 }}>← 返回列表</button>
             <h2 style={{ margin: 0 }}>{mode === "new" ? "撰写新文章" : "编辑文章"}</h2>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            {mode === "edit" && post && (
-              <Link to={`/post/${post.slug}`} target="_blank" className="pill" style={{ height: 40, lineHeight: '30px', padding: '0 15px' }}>
-                预览页面
-              </Link>
-            )}
-            <button onClick={onSave} disabled={saving} style={{ padding: "0 24px" }}>
-              {saving ? "保存中…" : "保存更改"}
-            </button>
-          </div>
-        </div>
+	          <div style={{ display: "flex", gap: 10 }}>
+	            {mode === "edit" && post && (
+	              <Link to={`/post/${post.slug}`} target="_blank" className="pill" style={{ height: 40, lineHeight: '30px', padding: '0 15px' }}>
+	                预览页面
+	              </Link>
+	            )}
+	            <button onClick={() => onSave()} disabled={saving} style={{ padding: "0 24px" }}>
+	              {saving ? "保存中…" : "保存更改"}
+	            </button>
+              <button onClick={() => onSave({ publish: true })} disabled={saving} style={{ padding: "0 24px" }}>
+                {saving ? "保存中…" : "保存并发布"}
+              </button>
+	          </div>
+	        </div>
 
         <div style={{ display: "grid", gap: 20 }}>
           {/* Title Area */}
@@ -390,10 +395,7 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
 	              <div className="card" style={{ padding: 20 }}>
 	                <div className="widget-title">发布状态</div>
 	                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
-	                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-	                    <input type="checkbox" checked={status === "published"} onChange={(e) => setStatus(e.target.checked ? "published" : "draft")} style={{ width: 'auto' }} />
-	                    <span>立即发布</span>
-	                  </label>
+                    <div className="muted">当前状态：{status === "published" ? "已发布" : "草稿"}</div>
 	                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
 	                    <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} style={{ width: 'auto' }} />
 	                    <span>置顶文章 (首页置顶)</span>
@@ -445,6 +447,10 @@ export function AdminSettingsPage() {
   const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreFullBusy, setRestoreFullBusy] = useState(false);
+  const [restoreFullFile, setRestoreFullFile] = useState<File | null>(null);
+  const [restoreFullMsg, setRestoreFullMsg] = useState<string | null>(null);
+  const [restoreFullErr, setRestoreFullErr] = useState<string | null>(null);
 
   const [siteDraft, setSiteDraft] = useState(site);
   const [siteBusy, setSiteBusy] = useState(false);
@@ -535,6 +541,32 @@ export function AdminSettingsPage() {
     }
   };
 
+  const onDownloadFullBackup = () => {
+    window.location.assign("/api/admin/backup/full");
+  };
+
+  const onRestoreFull = async () => {
+    setRestoreFullErr(null);
+    setRestoreFullMsg(null);
+    if (!restoreFullFile) return setRestoreFullErr("请选择全量备份文件（.tar.gz）");
+    if (!window.confirm("全量恢复会替换数据库和图片库，并触发服务重启。确定继续吗？")) return;
+
+    setRestoreFullBusy(true);
+    try {
+      const res = await api.adminRestoreFullBackup(restoreFullFile);
+      if (res.restarting) {
+        setRestoreFullMsg("已开始全量恢复，服务正在重启…");
+        setTimeout(() => window.location.reload(), 2500);
+      } else {
+        setRestoreFullMsg("已恢复");
+      }
+    } catch (e: any) {
+      setRestoreFullErr(e?.message ?? String(e));
+    } finally {
+      setRestoreFullBusy(false);
+    }
+  };
+
   const saveSite = async () => {
     if (!siteDraft) return;
     setSiteErr(null);
@@ -590,6 +622,23 @@ export function AdminSettingsPage() {
                 {restoreBusy ? "恢复中..." : "覆盖并恢复数据"}
               </button>
               {restoreMsg ? <div style={{ marginTop: 10, color: 'blue' }}>{restoreMsg}</div> : null}
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20, marginTop: 20 }}>
+              <div className="muted" style={{ marginBottom: 10 }}>全量备份/恢复（包含图片库，带哈希校验）</div>
+              <button onClick={onDownloadFullBackup} className="btn-follow">下载全量备份</button>
+              <div style={{ height: 12 }} />
+              <input
+                type="file"
+                onChange={(e) => setRestoreFullFile(e.target.files?.[0] ?? null)}
+                accept=".tar.gz,application/gzip"
+                style={{ display: 'block', marginBottom: 10 }}
+              />
+              <button onClick={onRestoreFull} disabled={restoreFullBusy || !restoreFullFile} style={{ background: '#ff4d4f' }}>
+                {restoreFullBusy ? "全量恢复中..." : "上传并全量恢复"}
+              </button>
+              {restoreFullMsg ? <div style={{ marginTop: 10, color: 'blue' }}>{restoreFullMsg}</div> : null}
+              {restoreFullErr ? <div style={{ marginTop: 10, color: 'red' }}>{restoreFullErr}</div> : null}
             </div>
           </div>
         </div>

@@ -86,38 +86,38 @@ export function ArchivePage() {
             <PostCard key={p.id} post={p} index={i} variant="square" />
           ))}
         </div>
+      </div>
 
-        <div className="pager" style={{ marginTop: 18 }}>
-          <button
-            onClick={async () => {
-              const next = Math.max(1, page - 1);
-              const res = await api.listPosts({ page: next, limit });
-              setItems(res.items);
-              setTotal(res.total);
-              setPage(next);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            disabled={page <= 1}
-          >
-            上一页
-          </button>
-          <div className="muted">
-            第 {page} / {totalPages} 页
-          </div>
-          <button
-            onClick={async () => {
-              const next = Math.min(totalPages, page + 1);
-              const res = await api.listPosts({ page: next, limit });
-              setItems(res.items);
-              setTotal(res.total);
-              setPage(next);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            disabled={page >= totalPages}
-          >
-            下一页
-          </button>
+      <div className="pager pagerFloat">
+        <button
+          onClick={async () => {
+            const next = Math.max(1, page - 1);
+            const res = await api.listPosts({ page: next, limit });
+            setItems(res.items);
+            setTotal(res.total);
+            setPage(next);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          disabled={page <= 1}
+        >
+          上一页
+        </button>
+        <div className="muted">
+          第 {page} / {totalPages} 页
         </div>
+        <button
+          onClick={async () => {
+            const next = Math.min(totalPages, page + 1);
+            const res = await api.listPosts({ page: next, limit });
+            setItems(res.items);
+            setTotal(res.total);
+            setPage(next);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          disabled={page >= totalPages}
+        >
+          下一页
+        </button>
       </div>
     </PageLayout>
   );

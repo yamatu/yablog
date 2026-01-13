@@ -1,12 +1,14 @@
 import cookieParser from "cookie-parser";
 import express from "express";
 import helmet from "helmet";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import multer from "multer";
+import tar from "tar";
 import { z } from "zod";
 
 import { authenticateUser, hashPassword, loginSchema, signToken, verifyPassword } from "./auth.js";
@@ -49,6 +51,40 @@ try {
 
 let isRestoring = false;
 let isBackingUp = false;
+
+type BackupManifest = {
+  version: 1;
+  createdAt: string;
+  files: { path: string; size: number; sha256: string }[];
+};
+
+const sha256File = async (filePath: string) => {
+  const hash = crypto.createHash("sha256");
+  const stream = fs.createReadStream(filePath);
+  for await (const chunk of stream) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+};
+
+const listFilesRecursive = (rootDir: string) => {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) out.push(full);
+    }
+  };
+  if (fs.existsSync(rootDir)) walk(rootDir);
+  return out;
+};
+
+const isValidSqliteFile = (filePath: string) => {
+  const fd = fs.openSync(filePath, "r");
+  const header = Buffer.alloc(16);
+  fs.readSync(fd, header, 0, 16, 0);
+  fs.closeSync(fd);
+  return header.subarray(0, 15).toString("utf8").startsWith("SQLite format 3");
+};
 
 if (!hasAnyUsers(db)) {
   if (!config.adminUsername || !config.adminPassword) {
@@ -171,6 +207,60 @@ adminRouter.get("/backup", async (_req, res) => {
   } finally {
     isBackingUp = false;
     fs.rmSync(tmpDbPath, { force: true });
+  }
+});
+
+adminRouter.get("/backup/full", async (_req, res) => {
+  if (isRestoring) return res.status(503).json({ error: "restarting" });
+  if (isBackingUp) return res.status(429).json({ error: "busy" });
+  isBackingUp = true;
+
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `yablog-full-backup-${ts}.tar.gz`;
+  const dir = path.dirname(config.databasePath);
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "yablog_full_backup_"));
+  const tmpDb = path.join(tmpDir, "db.sqlite");
+  const tmpUploads = path.join(tmpDir, "uploads");
+  const tmpManifest = path.join(tmpDir, "manifest.json");
+  const tmpTar = path.join(os.tmpdir(), `yablog-full-backup-${Date.now()}.tar.gz`);
+
+  try {
+    await db.backup(tmpDb);
+    fs.mkdirSync(tmpUploads, { recursive: true });
+    if (fs.existsSync(uploadsDir)) {
+      fs.cpSync(uploadsDir, tmpUploads, { recursive: true });
+    }
+
+    const files: BackupManifest["files"] = [];
+    const all = [tmpDb, ...listFilesRecursive(tmpUploads)];
+    for (const full of all) {
+      const stat = fs.statSync(full);
+      const rel = path.relative(tmpDir, full).replaceAll(path.sep, "/");
+      files.push({ path: rel, size: stat.size, sha256: await sha256File(full) });
+    }
+
+    const manifest: BackupManifest = { version: 1, createdAt: new Date().toISOString(), files };
+    fs.writeFileSync(tmpManifest, JSON.stringify(manifest, null, 2), "utf8");
+
+    await tar.c(
+      {
+        gzip: { level: 9 },
+        cwd: tmpDir,
+        file: tmpTar,
+        portable: true,
+      },
+      ["manifest.json", "db.sqlite", "uploads"],
+    );
+
+    res.setHeader("content-type", "application/gzip");
+    res.setHeader("content-disposition", `attachment; filename="${filename}"`);
+    res.setHeader("cache-control", "no-store");
+    await pipeline(fs.createReadStream(tmpTar), res);
+  } finally {
+    isBackingUp = false;
+    fs.rmSync(tmpTar, { force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
 
@@ -307,6 +397,114 @@ adminRouter.post("/restore", upload.single("file"), async (req: AuthedRequest & 
     fs.rmSync(restoredDbPath, { force: true });
   }
 });
+
+adminRouter.post(
+  "/restore/full",
+  upload.single("file"),
+  async (req: AuthedRequest & { file?: any }, res) => {
+    if (isRestoring) return res.status(429).json({ error: "busy" });
+    const file = req.file as { path: string; originalname: string } | undefined;
+    if (!file) return res.status(400).json({ error: "file_required" });
+
+    isRestoring = true;
+    const dir = path.dirname(config.databasePath);
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+
+    const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), "yablog_restore_"));
+    const restoredDbPath = path.join(dir, `yablog.restored.${Date.now()}.db`);
+    const stagedUploads = path.join(dir, `uploads.restored.${Date.now()}`);
+    const preRestorePath = path.join(dir, `yablog.pre-restore.${ts}.db`);
+    let dbClosed = false;
+
+    try {
+      await tar.x({ file: file.path, cwd: extractDir, strict: true });
+      const manifestPath = path.join(extractDir, "manifest.json");
+      const dbPath = path.join(extractDir, "db.sqlite");
+      const uploadsPath = path.join(extractDir, "uploads");
+
+      if (!fs.existsSync(manifestPath) || !fs.existsSync(dbPath)) {
+        isRestoring = false;
+        return res.status(400).json({ error: "invalid_backup" });
+      }
+
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as BackupManifest;
+      if (manifest.version !== 1) {
+        isRestoring = false;
+        return res.status(400).json({ error: "unsupported_backup_version" });
+      }
+
+      for (const entry of manifest.files) {
+        const full = path.join(extractDir, entry.path);
+        if (!fs.existsSync(full)) {
+          isRestoring = false;
+          return res.status(400).json({ error: "backup_missing_file" });
+        }
+        const stat = fs.statSync(full);
+        if (stat.size !== entry.size) {
+          isRestoring = false;
+          return res.status(400).json({ error: "backup_size_mismatch" });
+        }
+        const hash = await sha256File(full);
+        if (hash !== entry.sha256) {
+          isRestoring = false;
+          return res.status(400).json({ error: "backup_hash_mismatch" });
+        }
+      }
+
+      if (!isValidSqliteFile(dbPath)) {
+        isRestoring = false;
+        return res.status(400).json({ error: "invalid_sqlite_file" });
+      }
+
+      await db.backup(preRestorePath);
+
+      // Stage DB + uploads inside the mounted data directory for atomic renames.
+      fs.copyFileSync(dbPath, restoredDbPath);
+      fs.rmSync(stagedUploads, { recursive: true, force: true });
+      fs.mkdirSync(stagedUploads, { recursive: true });
+      if (fs.existsSync(uploadsPath)) {
+        fs.cpSync(uploadsPath, stagedUploads, { recursive: true });
+      }
+
+      server?.close();
+      try {
+        db.close();
+        dbClosed = true;
+      } catch {
+        dbClosed = true;
+      }
+
+      fs.rmSync(`${config.databasePath}-wal`, { force: true });
+      fs.rmSync(`${config.databasePath}-shm`, { force: true });
+
+      if (fs.existsSync(config.databasePath)) {
+        fs.renameSync(config.databasePath, path.join(dir, `yablog.replaced.${ts}.db`));
+      }
+      fs.renameSync(restoredDbPath, config.databasePath);
+
+      const replacedUploads = path.join(dir, `uploads.replaced.${ts}`);
+      if (fs.existsSync(uploadsDir)) {
+        fs.rmSync(replacedUploads, { recursive: true, force: true });
+        fs.renameSync(uploadsDir, replacedUploads);
+      }
+      fs.renameSync(stagedUploads, uploadsDir);
+
+      res.json({ ok: true, restarting: true });
+      setTimeout(() => process.exit(0), 150);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[yablog-api] full restore failed", e);
+      if (!res.headersSent) res.status(500).json({ error: "restore_failed", restarting: dbClosed });
+      if (dbClosed) setTimeout(() => process.exit(1), 150);
+      if (!dbClosed) isRestoring = false;
+    } finally {
+      fs.rmSync(file.path, { force: true });
+      fs.rmSync(extractDir, { recursive: true, force: true });
+      fs.rmSync(restoredDbPath, { force: true });
+      fs.rmSync(stagedUploads, { recursive: true, force: true });
+    }
+  },
+);
 
 adminRouter.put("/account", async (req: AuthedRequest, res) => {
   const body = z

@@ -157,6 +157,15 @@ export const api = {
     });
   },
 
+  adminRestoreFullBackup: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return json<{ ok: true; restarting: boolean }>("/api/admin/restore/full", {
+      method: "POST",
+      body: fd,
+    });
+  },
+
   adminGetSite: () => json<{ site: SiteSettings }>("/api/admin/site"),
   adminUpdateSite: (site: SiteSettings) =>
     json<{ ok: true }>("/api/admin/site", {
