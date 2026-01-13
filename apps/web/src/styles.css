@@ -2,7 +2,7 @@
 :root {
   color-scheme: light dark;
 
-  --max: 1200px;
+  --max: 1400px;
   --radius: 12px;
 
   --shadow: 0 4px 8px 6px rgba(7, 17, 27, 0.05);
@@ -67,6 +67,24 @@
   --shadow-hover: 0 4px 12px 12px rgba(0, 0, 0, 0.4);
   --nav-bg: rgba(18, 18, 18, 0.9);
   --nav-text: #eeeeee;
+}
+
+/* Dark mode: dim images a bit by default (public pages). */
+:root[data-theme="dark"] img {
+  filter: brightness(0.82) contrast(1.05) saturate(0.95);
+}
+
+/* Don't dim images in admin UI (gallery/preview should be true-to-file). */
+.adminRoot img {
+  filter: none !important;
+}
+
+:root[data-theme="dark"] .hero-overlay {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="dark"] .post-header-overlay {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.68), transparent);
 }
 
 :root[data-theme="light"] {
@@ -401,7 +419,7 @@ a:hover {
   color: #fff;
   padding: 20px;
   width: 100%;
-  max-width: 800px;
+  max-width: min(1100px, 92vw);
   animation: slideUp 0.8s ease-out;
 }
 
@@ -436,7 +454,7 @@ a:hover {
   gap: 20px;
   /* Crucial for sticky sidebar: align-items start prevents stretching */
   align-items: flex-start;
-  max-width: 1200px;
+  max-width: var(--max);
   width: 100%;
   margin: 0 auto;
   padding: 34px 20px 40px;
@@ -859,8 +877,14 @@ button:hover,
 
 /* Markdown & Footer */
 .markdown {
-  padding: 40px;
+  padding: 34px;
   line-height: 1.8;
+}
+
+@media (max-width: 900px) {
+  .markdown {
+    padding: 20px;
+  }
 }
 
 .markdown h1,

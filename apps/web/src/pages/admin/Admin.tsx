@@ -35,7 +35,7 @@ function useMe() {
 // Wrap admin pages in a simple centered container since we removed the public layout
 const AdminLayoutWrapper = ({ children }: { children: React.ReactNode }) => (
   <div className="adminRoot" style={{ minHeight: "100vh", background: "var(--bg)", padding: "40px 20px" }}>
-    <div className="container" style={{ maxWidth: 1000 }}>
+    <div className="container" style={{ maxWidth: 1280 }}>
       {children}
     </div>
   </div>

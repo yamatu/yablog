@@ -143,7 +143,10 @@ export function MarkdownEditor({
     const s = el.selectionStart ?? 0;
     const e = el.selectionEnd ?? 0;
     const alt = value.slice(s, e) || "图片";
-    const snippet = `![${alt}](${url})`;
+    const widthRaw = window.prompt("图片宽度（可选，例如：600 或 80%），留空则原始大小：", "");
+    const width = (widthRaw ?? "").trim();
+    const title = width ? ` "w=${width}"` : "";
+    const snippet = `![${alt}](${url}${title})`;
     const next = `${value.slice(0, s)}${snippet}${value.slice(e)}`;
     const cursor = s + snippet.length;
     setWithSelection(next, cursor, cursor);
