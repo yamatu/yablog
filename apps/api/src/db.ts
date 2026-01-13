@@ -116,6 +116,29 @@ export const getUserById = (db: Db, id: number) => {
     | undefined;
 };
 
+export const getFirstUser = (db: Db) => {
+  return db
+    .prepare(
+      "SELECT id, username, password_hash as passwordHash, created_at as createdAt FROM users ORDER BY id ASC LIMIT 1",
+    )
+    .get() as
+    | (User & {
+        passwordHash: string;
+      })
+    | undefined;
+};
+
+export const updateUserCredentials = (
+  db: Db,
+  args: { id: number; username: string; passwordHash: string },
+) => {
+  db.prepare("UPDATE users SET username = ?, password_hash = ? WHERE id = ?").run(
+    args.username,
+    args.passwordHash,
+    args.id,
+  );
+};
+
 export const hasAnyUsers = (db: Db) => {
   const row = db.prepare("SELECT COUNT(1) as c FROM users").get() as { c: number };
   return row.c > 0;

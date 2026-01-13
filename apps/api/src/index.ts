@@ -11,7 +11,15 @@ import { z } from "zod";
 
 import { authenticateUser, hashPassword, loginSchema, signToken, verifyPassword } from "./auth.js";
 import { config } from "./config.js";
-import { ensureAdminUser, getUserById, hasAnyUsers, initDb, openDb } from "./db.js";
+import {
+  ensureAdminUser,
+  getFirstUser,
+  getUserById,
+  hasAnyUsers,
+  initDb,
+  openDb,
+  updateUserCredentials,
+} from "./db.js";
 import { requireAuth, type AuthedRequest } from "./middleware.js";
 import { mountAdminRoutes } from "./routes/admin.js";
 import { mountPublicRoutes } from "./routes/public.js";
@@ -34,6 +42,26 @@ if (!hasAnyUsers(db)) {
     username: config.adminUsername,
     passwordHash: await hashPassword(config.adminPassword),
   });
+} else if (config.resetAdminOnStart) {
+  if (!config.adminUsername || !config.adminPassword) {
+    // eslint-disable-next-line no-console
+    console.error("[yablog-api] RESET_ADMIN_ON_START=1 requires ADMIN_USERNAME and ADMIN_PASSWORD.");
+    process.exit(1);
+  }
+  const first = getFirstUser(db);
+  if (!first) {
+    // should not happen since hasAnyUsers(db) is true
+    // eslint-disable-next-line no-console
+    console.error("[yablog-api] No user found to reset.");
+    process.exit(1);
+  }
+  updateUserCredentials(db, {
+    id: first.id,
+    username: config.adminUsername,
+    passwordHash: await hashPassword(config.adminPassword),
+  });
+  // eslint-disable-next-line no-console
+  console.warn("[yablog-api] Admin credentials reset via RESET_ADMIN_ON_START=1.");
 }
 
 const app = express();

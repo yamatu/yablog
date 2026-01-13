@@ -17,7 +17,7 @@ export const verifyToken = (token: string) => {
 };
 
 export const loginSchema = z.object({
-  username: z.string().min(1).max(64),
+  username: z.string().trim().min(1).max(64),
   password: z.string().min(1).max(200),
 });
 
@@ -40,4 +40,3 @@ export const authenticateUser = async (
   if (!ok) return null;
   return { id: row.id, username: row.username, createdAt: row.createdAt };
 };
-

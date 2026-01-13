@@ -32,6 +32,14 @@ export type PostUpsertPayload = {
 async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const res = await fetch(input, { ...init, credentials: "include" });
   if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = await res.json().catch(() => null) as any;
+      const err = typeof data?.error === "string" ? data.error : null;
+      if (err === "invalid_credentials") throw new Error("用户名或密码错误");
+      if (err) throw new Error(err);
+      throw new Error(`HTTP ${res.status}`);
+    }
     const text = await res.text().catch(() => "");
     throw new Error(text || `HTTP ${res.status}`);
   }

@@ -68,6 +68,7 @@ npm run dev
 ## Notes
 
 - 初次启动会自动创建管理员账号（由 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 指定）
+- 忘记密码时可临时设置 `RESET_ADMIN_ON_START=1` 并重启服务，将管理员账号密码重置为 `.env` 中的值
 - 生产环境请务必修改：`JWT_SECRET`，并在 HTTPS 场景设置 `COOKIE_SECURE=1`
 
 ## License

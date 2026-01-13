@@ -16,6 +16,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET ?? "dev-only-change-me",
   adminUsername: process.env.ADMIN_USERNAME,
   adminPassword: process.env.ADMIN_PASSWORD,
+  resetAdminOnStart: (process.env.RESET_ADMIN_ON_START ?? "0") === "1",
   cookieName: process.env.COOKIE_NAME ?? "yablog_token",
   cookieSecure: (process.env.COOKIE_SECURE ?? "0") === "1",
   webDistPath: process.env.WEB_DIST_PATH,
