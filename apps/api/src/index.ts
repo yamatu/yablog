@@ -96,6 +96,7 @@ const safeUploadName = (value: string) => {
   if (name.includes("..")) return null;
   if (!/^[A-Za-z0-9._-]+$/.test(name)) return null;
   if (name === "_thumbs") return null;
+  if (name === "_tmp") return null;
   return name;
 };
 
@@ -103,8 +104,16 @@ const thumbsDir = path.join(uploadsDir, "_thumbs");
 fs.mkdirSync(thumbsDir, { recursive: true });
 const thumbNameFor = (name: string) => `t_${name}.webp`;
 
-const imageTmpDir = path.join(os.tmpdir(), "yablog_upload_images");
-fs.mkdirSync(imageTmpDir, { recursive: true });
+const uploadsTmpDir = path.join(uploadsDir, "_tmp");
+fs.mkdirSync(uploadsTmpDir, { recursive: true });
+try {
+  for (const entry of fs.readdirSync(uploadsTmpDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    fs.rmSync(path.join(uploadsTmpDir, entry.name), { force: true });
+  }
+} catch {
+  // ignore
+}
 
 const optimizeAndWriteImage = async (inputPath: string, outPath: string, outExt: string) => {
   const img = sharp(inputPath).rotate().resize({ width: 2400, withoutEnlargement: true });
@@ -290,7 +299,14 @@ adminRouter.get("/backup/full", async (_req, res) => {
     await db.backup(tmpDb);
     fs.mkdirSync(tmpUploads, { recursive: true });
     if (fs.existsSync(uploadsDir)) {
-      fs.cpSync(uploadsDir, tmpUploads, { recursive: true });
+      fs.cpSync(uploadsDir, tmpUploads, {
+        recursive: true,
+        filter: (src) => {
+          const rel = path.relative(uploadsDir, src);
+          if (!rel) return true;
+          return !rel.split(path.sep).includes("_tmp");
+        },
+      });
     }
 
     const files: BackupManifest["files"] = [];
@@ -376,7 +392,8 @@ const upload = multer({
 });
 
 const uploadImage = multer({
-  dest: imageTmpDir,
+  // Keep temp uploads on the same filesystem as /data/uploads to avoid EXDEV rename errors in Docker volumes.
+  dest: uploadsTmpDir,
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
@@ -408,7 +425,10 @@ adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedReques
   }
 
   const targetExt = path.extname(targetName).toLowerCase();
-  const tmpOut = path.join(os.tmpdir(), `yablog_img_${Date.now()}_${Math.random().toString(16).slice(2)}${targetExt || ".img"}`);
+  const tmpOut = path.join(
+    uploadsTmpDir,
+    `opt_${Date.now()}_${Math.random().toString(16).slice(2)}${targetExt || ".img"}`,
+  );
 
   try {
     if (targetExt === ".gif" || targetExt === ".svg") {
