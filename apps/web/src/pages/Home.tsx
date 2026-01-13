@@ -50,6 +50,9 @@ export function HomePage() {
     site?.images.homeHero ||
     "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80";
 
+  const heroTitle = site?.home?.title || "YaBlog";
+  const heroSubtitle = site?.home?.subtitle || "Minimal · Elegant · Powerful";
+
   const goToPage = async (nextPage: number) => {
     const p = Math.max(1, nextPage);
     setErr(null);
@@ -78,8 +81,8 @@ export function HomePage() {
       >
         <div className="hero-overlay" />
         <div className="hero-content">
-          <h1 className="hero-title">YaBlog</h1>
-          <p className="hero-subtitle">Minimal · Elegant · Powerful</p>
+          <h1 className="hero-title">{heroTitle}</h1>
+          <p className="hero-subtitle">{heroSubtitle}</p>
         </div>
         <div className="scroll-down" onClick={scrollToContent}>
           <MdKeyboardArrowDown />

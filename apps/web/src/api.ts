@@ -18,6 +18,10 @@ export type Post = {
 export type User = { userId: number; username: string };
 
 export type SiteSettings = {
+  home: {
+    title: string;
+    subtitle: string;
+  };
   images: {
     homeHero: string;
     archiveHero: string;
@@ -72,6 +76,21 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
 
 export const api = {
   health: () => json<{ ok: true }>("/api/health"),
+
+  search: (args: { q: string; page?: number; limit?: number }) => {
+    const url = new URL("/api/search", window.location.origin);
+    for (const [k, v] of Object.entries(args)) {
+      if (v === undefined || v === null || v === "") continue;
+      url.searchParams.set(k, String(v));
+    }
+    return json<{
+      items: Post[];
+      total: number;
+      page: number;
+      limit: number;
+      recommendations: Post[];
+    }>(url);
+  },
 
   listPosts: (args: {
     page?: number;

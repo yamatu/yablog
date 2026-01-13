@@ -109,7 +109,37 @@ export const migrateDb = (db: Db) => {
   if (!hasColumn(db, "posts", "sort_order")) {
     db.exec("ALTER TABLE posts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
   }
-  // settings table created in initDb; nothing else needed here yet
+  // FTS (best-effort; if SQLite build lacks FTS5, fallback to LIKE search)
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
+        title,
+        summary,
+        content_md,
+        content='posts',
+        content_rowid='id'
+      );
+    `);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS posts_ai AFTER INSERT ON posts BEGIN
+        INSERT INTO posts_fts(rowid, title, summary, content_md)
+        VALUES (new.id, new.title, new.summary, new.content_md);
+      END;
+      CREATE TRIGGER IF NOT EXISTS posts_ad AFTER DELETE ON posts BEGIN
+        INSERT INTO posts_fts(posts_fts, rowid, title, summary, content_md)
+        VALUES('delete', old.id, old.title, old.summary, old.content_md);
+      END;
+      CREATE TRIGGER IF NOT EXISTS posts_au AFTER UPDATE ON posts BEGIN
+        INSERT INTO posts_fts(posts_fts, rowid, title, summary, content_md)
+        VALUES('delete', old.id, old.title, old.summary, old.content_md);
+        INSERT INTO posts_fts(rowid, title, summary, content_md)
+        VALUES (new.id, new.title, new.summary, new.content_md);
+      END;
+    `);
+    db.exec(`INSERT INTO posts_fts(posts_fts) VALUES('rebuild');`);
+  } catch {
+    // ignore
+  }
 };
 
 export const getUserByUsername = (db: Db, username: string) => {
@@ -484,6 +514,10 @@ export const updatePost = (
 };
 
 export type SiteSettings = {
+  home: {
+    title: string;
+    subtitle: string;
+  };
   images: {
     homeHero: string;
     archiveHero: string;
@@ -506,6 +540,10 @@ export type SiteSettings = {
 };
 
 export const defaultSiteSettings = (): SiteSettings => ({
+  home: {
+    title: "YaBlog",
+    subtitle: "Minimal · Elegant · Powerful",
+  },
   images: {
     homeHero: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80",
     archiveHero: "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?auto=format&fit=crop&w=1920&q=80",
@@ -531,13 +569,209 @@ export const defaultSiteSettings = (): SiteSettings => ({
   },
 });
 
+const mergeSiteSettings = (base: SiteSettings, incoming: any): SiteSettings => {
+  const safe = typeof incoming === "object" && incoming ? incoming : {};
+  return {
+    home: {
+      title: String(safe?.home?.title ?? base.home.title),
+      subtitle: String(safe?.home?.subtitle ?? base.home.subtitle),
+    },
+    images: {
+      homeHero: String(safe?.images?.homeHero ?? base.images.homeHero),
+      archiveHero: String(safe?.images?.archiveHero ?? base.images.archiveHero),
+      tagsHero: String(safe?.images?.tagsHero ?? base.images.tagsHero),
+      aboutHero: String(safe?.images?.aboutHero ?? base.images.aboutHero),
+      defaultPostCover: String(safe?.images?.defaultPostCover ?? base.images.defaultPostCover),
+    },
+    sidebar: {
+      avatarUrl: String(safe?.sidebar?.avatarUrl ?? base.sidebar.avatarUrl),
+      name: String(safe?.sidebar?.name ?? base.sidebar.name),
+      bio: String(safe?.sidebar?.bio ?? base.sidebar.bio),
+      noticeMd: String(safe?.sidebar?.noticeMd ?? base.sidebar.noticeMd),
+      followButtons: Array.isArray(safe?.sidebar?.followButtons)
+        ? safe.sidebar.followButtons
+            .filter((b: any) => b && typeof b === "object")
+            .map((b: any) => ({ label: String(b.label ?? ""), url: String(b.url ?? "") }))
+            .filter((b: any) => b.label && b.url)
+        : base.sidebar.followButtons,
+      socials: Array.isArray(safe?.sidebar?.socials)
+        ? safe.sidebar.socials
+            .filter((s: any) => s && typeof s === "object")
+            .map((s: any) => ({
+              type: String(s.type ?? ""),
+              url: String(s.url ?? ""),
+              label: s.label ? String(s.label) : undefined,
+            }))
+            .filter((s: any) => s.type && s.url)
+        : base.sidebar.socials,
+    },
+    about: {
+      title: String(safe?.about?.title ?? base.about.title),
+      contentMd: String(safe?.about?.contentMd ?? base.about.contentMd),
+    },
+  };
+};
+
+const hasFts = (db: Db) => {
+  const row = db
+    .prepare("SELECT 1 as ok FROM sqlite_master WHERE type IN ('table','view') AND name = ? LIMIT 1")
+    .get("posts_fts") as { ok: 1 } | undefined;
+  return Boolean(row?.ok);
+};
+
+const toFtsQuery = (q: string) => {
+  const cleaned = q
+    .trim()
+    .replace(/["']/g, " ")
+    .replace(/[()[\]{}]/g, " ")
+    .replace(/\s+/g, " ");
+  if (!cleaned) return null;
+  // Prefix match for "fuzzy" feel (e.g., app* store*)
+  return cleaned
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => `${t}*`)
+    .join(" ");
+};
+
+export const searchPosts = (
+  db: Db,
+  args: { q: string; page: number; limit: number; includeDrafts: boolean },
+): { items: Post[]; total: number } => {
+  const q = args.q.trim();
+  if (!q) return { items: [], total: 0 };
+
+  const offset = (args.page - 1) * args.limit;
+  const clauses: string[] = ["p.slug != 'about'"];
+  if (!args.includeDrafts) clauses.push("p.status = 'published'");
+  const whereExtra = clauses.length ? `AND ${clauses.join(" AND ")}` : "";
+
+  if (hasFts(db)) {
+    const fts = toFtsQuery(q);
+    if (!fts) return { items: [], total: 0 };
+
+    const totalRow = db
+      .prepare(
+        `
+        SELECT COUNT(1) as total
+        FROM posts_fts f
+        JOIN posts p ON p.id = f.rowid
+        WHERE posts_fts MATCH ?
+        ${whereExtra}
+        `,
+      )
+      .get(fts) as { total: number };
+
+    const rows = db
+      .prepare(
+        `
+        SELECT
+          p.id,
+          p.title,
+          p.slug,
+          p.summary,
+          p.content_md as contentMd,
+          p.cover_image as coverImage,
+          p.status,
+          p.featured,
+          p.sort_order as sortOrder,
+          p.created_at as createdAt,
+          p.updated_at as updatedAt,
+          p.published_at as publishedAt
+        FROM posts_fts f
+        JOIN posts p ON p.id = f.rowid
+        WHERE posts_fts MATCH ?
+        ${whereExtra}
+        ORDER BY bm25(posts_fts) ASC, p.featured DESC, p.sort_order DESC, COALESCE(p.published_at, p.updated_at) DESC
+        LIMIT ?
+        OFFSET ?
+        `,
+      )
+      .all(fts, args.limit, offset) as any[];
+
+    const items = rows.map((row) => {
+      const tags = getTagsForPost(db, row.id);
+      const categories = getCategoriesForPost(db, row.id);
+      return mapPostRow(row, tags, categories);
+    });
+    return { items, total: totalRow.total };
+  }
+
+  // Fallback to LIKE-based search
+  const { items, total } = listPosts(db, {
+    includeDrafts: args.includeDrafts,
+    q,
+    page: args.page,
+    limit: args.limit,
+    tag: undefined,
+    category: undefined,
+    featured: undefined,
+  });
+  return { items, total };
+};
+
+export const recommendPosts = (
+  db: Db,
+  args: { base: Post[]; limit: number },
+): Post[] => {
+  if (!args.base.length) {
+    return listPosts(db, {
+      includeDrafts: false,
+      page: 1,
+      limit: args.limit,
+      featured: undefined,
+      tag: undefined,
+      category: undefined,
+      q: undefined,
+    }).items;
+  }
+
+  const baseIds = new Set(args.base.map((p) => p.id));
+  const seed = args.base[0];
+  const seedTag = seed.tags[0];
+  const seedCategory = seed.categories[0];
+
+  const candidates = seedTag
+    ? listPosts(db, {
+        includeDrafts: false,
+        page: 1,
+        limit: args.limit + 10,
+        featured: undefined,
+        tag: seedTag,
+        category: undefined,
+        q: undefined,
+      }).items
+    : seedCategory
+      ? listPosts(db, {
+          includeDrafts: false,
+          page: 1,
+          limit: args.limit + 10,
+          featured: undefined,
+          tag: undefined,
+          category: seedCategory,
+          q: undefined,
+        }).items
+      : listPosts(db, {
+          includeDrafts: false,
+          page: 1,
+          limit: args.limit + 10,
+          featured: undefined,
+          tag: undefined,
+          category: undefined,
+          q: undefined,
+        }).items;
+
+  return candidates.filter((p) => !baseIds.has(p.id)).slice(0, args.limit);
+};
+
 export const getSiteSettings = (db: Db): SiteSettings => {
   const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get("site_settings") as
     | { value: string }
     | undefined;
   if (!row) return defaultSiteSettings();
   try {
-    return JSON.parse(row.value) as SiteSettings;
+    const parsed = JSON.parse(row.value);
+    return mergeSiteSettings(defaultSiteSettings(), parsed);
   } catch {
     return defaultSiteSettings();
   }

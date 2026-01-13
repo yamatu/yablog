@@ -2,7 +2,14 @@ import type { Router } from "express";
 import { z } from "zod";
 
 import type { Db } from "../db.js";
-import { getPostBySlug, listCategories, listPosts, listTags } from "../db.js";
+import {
+  getPostBySlug,
+  listCategories,
+  listPosts,
+  listTags,
+  recommendPosts,
+  searchPosts,
+} from "../db.js";
 
 const parseBool = (value: unknown) => {
   if (value === "1" || value === "true") return true;
@@ -11,6 +18,26 @@ const parseBool = (value: unknown) => {
 };
 
 export const mountPublicRoutes = (router: Router, db: Db) => {
+  router.get("/search", (req, res) => {
+    const query = z
+      .object({
+        q: z.string().optional(),
+        page: z.string().optional(),
+        limit: z.string().optional(),
+      })
+      .parse(req.query);
+
+    const q = (query.q ?? "").trim();
+    const page = Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1);
+    const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit ?? "10", 10) || 10));
+
+    if (!q) return res.json({ items: [], total: 0, page, limit, recommendations: [] });
+
+    const { items, total } = searchPosts(db, { q, page, limit, includeDrafts: false });
+    const recommendations = recommendPosts(db, { base: items, limit: 6 });
+    res.json({ items, total, page, limit, recommendations });
+  });
+
   router.get("/posts", (req, res) => {
     const query = z
       .object({

@@ -128,15 +128,19 @@ export function SearchPage() {
   const [sp] = useSearchParams();
   const q = sp.get("q") ?? "";
   const [items, setItems] = useState<Post[]>([]);
+  const [recommendations, setRecommendations] = useState<Post[]>([]);
+  const [total, setTotal] = useState(0);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const res = await api.listPosts({ q, limit: 50 });
+        const res = await api.search({ q, limit: 30, page: 1 });
         if (!alive) return;
         setItems(res.items);
+        setTotal(res.total);
+        setRecommendations(res.recommendations);
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? String(e));
@@ -150,12 +154,40 @@ export function SearchPage() {
   return (
     <PageLayout title={`搜索：${q}`} bg={site?.images.archiveHero}>
       {err ? <div className="card" style={{ padding: 20 }}>加载失败：{err}</div> : null}
-      {items.length === 0 && !err && <div className="card" style={{ padding: 40, textAlign: 'center' }}>没有找到相关文章</div>}
-      <div className="grid">
-        {items.map((p, i) => (
-          <PostCard key={p.id} post={p} index={i} />
-        ))}
-      </div>
+      {!q.trim() && !err ? (
+        <div className="card" style={{ padding: 40, textAlign: "center" }}>请输入关键词进行搜索</div>
+      ) : null}
+
+      {q.trim() && items.length === 0 && !err ? (
+        <div className="card" style={{ padding: 40, textAlign: "center" }}>没有找到相关文章</div>
+      ) : null}
+
+      {items.length ? (
+        <div>
+          <div className="muted" style={{ padding: "10px 2px" }}>
+            共 {total} 篇结果
+          </div>
+          <div className="grid">
+            {items.map((p, i) => (
+              <PostCard key={p.id} post={p} index={i} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {recommendations.length ? (
+        <div style={{ marginTop: 24 }}>
+          <div className="card" style={{ padding: 20, marginBottom: 14 }}>
+            <div className="widget-title" style={{ marginBottom: 0 }}>相关推荐</div>
+            <div className="muted">基于搜索结果的标签/分类推荐</div>
+          </div>
+          <div className="grid">
+            {recommendations.map((p, i) => (
+              <PostCard key={`rec-${p.id}`} post={p} index={i} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </PageLayout>
   );
 }

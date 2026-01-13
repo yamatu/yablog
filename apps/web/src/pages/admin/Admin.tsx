@@ -651,6 +651,26 @@ export function AdminSettingsPage() {
           ) : (
             <div style={{ display: "grid", gap: 22 }}>
               <div>
+                <div className="widget-title">首页文案</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <input
+                    value={siteDraft.home.title}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, home: { ...siteDraft.home, title: e.target.value } })
+                    }
+                    placeholder="首页标题（如 YaBlog）"
+                  />
+                  <input
+                    value={siteDraft.home.subtitle}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, home: { ...siteDraft.home, subtitle: e.target.value } })
+                    }
+                    placeholder="首页副标题（如 Minimal · Elegant · Powerful）"
+                  />
+                </div>
+              </div>
+
+              <div>
                 <div className="widget-title">顶部图片</div>
                 <div style={{ display: "grid", gap: 12 }}>
                   <input

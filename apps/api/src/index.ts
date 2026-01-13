@@ -270,6 +270,10 @@ adminRouter.get("/site", (_req, res) => {
 
 adminRouter.put("/site", (req: AuthedRequest, res) => {
   const siteSchema = z.object({
+    home: z.object({
+      title: z.string().min(1).max(80),
+      subtitle: z.string().max(200),
+    }),
     images: z.object({
       homeHero: z.string(),
       archiveHero: z.string(),
