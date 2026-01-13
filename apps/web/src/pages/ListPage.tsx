@@ -4,6 +4,19 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, Post } from "../api";
 import { PostCard } from "../components/PostCard";
 
+function hashString(input: string) {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function chipHue(name: string) {
+  return hashString(name) % 360;
+}
+
 export function ArchivePage() {
   const [items, setItems] = useState<Post[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -105,9 +118,14 @@ export function TagListPage() {
       <div className="glass content">
         <h2 style={{ marginTop: 0 }}>标签</h2>
         {err ? <div className="muted">加载失败：{err}</div> : null}
-        <div className="meta">
+        <div className="chipCloud">
           {items.map((t) => (
-            <Link key={t} className="pill" to={`/tag/${encodeURIComponent(t)}`}>
+            <Link
+              key={t}
+              className="colorChip"
+              style={{ ["--h" as any]: chipHue(t) }}
+              to={`/tag/${encodeURIComponent(t)}`}
+            >
               #{t}
             </Link>
           ))}
@@ -143,9 +161,14 @@ export function CategoryListPage() {
       <div className="glass content">
         <h2 style={{ marginTop: 0 }}>分类</h2>
         {err ? <div className="muted">加载失败：{err}</div> : null}
-        <div className="meta">
+        <div className="chipCloud">
           {items.map((c) => (
-            <Link key={c.slug} className="pill" to={`/category/${encodeURIComponent(c.name)}`}>
+            <Link
+              key={c.slug}
+              className="colorChip"
+              style={{ ["--h" as any]: chipHue(c.name) }}
+              to={`/category/${encodeURIComponent(c.name)}`}
+            >
               {c.name}
             </Link>
           ))}
@@ -230,4 +253,3 @@ export function CategoryPage() {
     </div>
   );
 }
-
