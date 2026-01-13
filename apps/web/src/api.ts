@@ -22,6 +22,12 @@ export type SiteSettings = {
     title: string;
     subtitle: string;
   };
+  security: {
+    hotlink: {
+      enabled: boolean;
+      allowedOrigins: string[];
+    };
+  };
   images: {
     homeHero: string;
     archiveHero: string;
@@ -193,14 +199,30 @@ export const api = {
       body: JSON.stringify({ site }),
     }),
 
-  adminUploadImage: (file: File) => {
+  adminUploadImage: (file: File, opts?: { replace?: string }) => {
     const fd = new FormData();
     fd.append("file", file);
-    return json<{ ok: true; url: string }>("/api/admin/upload", {
+    const url = new URL("/api/admin/upload", window.location.origin);
+    if (opts?.replace) url.searchParams.set("replace", opts.replace);
+    return json<{ ok: true; url: string }>(url, {
       method: "POST",
       body: fd,
     });
   },
+
+  adminListUploads: () =>
+    json<{
+      items: {
+        name: string;
+        url: string;
+        thumbUrl: string | null;
+        size: number;
+        updatedAt: string;
+      }[];
+    }>("/api/admin/uploads"),
+
+  adminDeleteUpload: (name: string) =>
+    json<{ ok: true }>(`/api/admin/uploads/${encodeURIComponent(name)}`, { method: "DELETE" }),
 
   adminUpdatePostOrder: (id: number, payload: { featured?: boolean; sortOrder?: number }) =>
     json<{ ok: true }>(`/api/admin/posts/${id}/order`, {

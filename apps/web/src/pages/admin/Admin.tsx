@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { api, Post, User } from "../../api";
+import { ImageField } from "../../components/ImageField";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useSite } from "../../site";
 
@@ -354,30 +355,18 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
 	                  <label style={{ fontSize: 13, color: 'var(--muted)' }}>Slug (URL路径):</label>
 	                  <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="example-post" />
 
-	                  <label style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>摘要:</label>
-	                  <textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="文章简介..." rows={3} style={{ resize: 'vertical' }} />
+                    <label style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>摘要:</label>
+                    <textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="文章简介..." rows={3} style={{ resize: 'vertical' }} />
 
-                    <label style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>顶部图片 (Cover):</label>
-                    <input value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="https://..." />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (!f) return;
-                        try {
-                          const res = await api.adminUploadImage(f);
-                          setCoverImage(res.url);
-                        } catch (err: any) {
-                          setErr(err?.message ?? String(err));
-                        }
-                      }}
-                    />
-                    {coverImage ? (
-                      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
-                        <img src={coverImage} alt="cover" style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
-                      </div>
-                    ) : null}
+                    <div style={{ marginTop: 8 }}>
+                      <ImageField
+                        label="顶部图片 (Cover)"
+                        value={coverImage}
+                        onChange={setCoverImage}
+                        placeholder="https://... 或 /uploads/..."
+                        help="建议使用图库上传（会自动压缩并生成缩略图）"
+                      />
+                    </div>
 	                </div>
 	              </div>
 
@@ -672,33 +661,31 @@ export function AdminSettingsPage() {
 
               <div>
                 <div className="widget-title">顶部图片</div>
-                <div style={{ display: "grid", gap: 12 }}>
-                  <input
+                <div style={{ display: "grid", gap: 18 }}>
+                  <ImageField
+                    label="首页顶部图片"
                     value={siteDraft.images.homeHero}
-                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, homeHero: e.target.value } })}
-                    placeholder="首页顶部图片 URL"
+                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, homeHero: v } })}
                   />
-                  <input
+                  <ImageField
+                    label="归档顶部图片"
                     value={siteDraft.images.archiveHero}
-                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, archiveHero: e.target.value } })}
-                    placeholder="归档顶部图片 URL"
+                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, archiveHero: v } })}
                   />
-                  <input
+                  <ImageField
+                    label="标签/分类顶部图片"
                     value={siteDraft.images.tagsHero}
-                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, tagsHero: e.target.value } })}
-                    placeholder="标签/分类顶部图片 URL"
+                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, tagsHero: v } })}
                   />
-                  <input
+                  <ImageField
+                    label="关于页顶部图片"
                     value={siteDraft.images.aboutHero}
-                    onChange={(e) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, aboutHero: e.target.value } })}
-                    placeholder="关于页顶部图片 URL"
+                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, aboutHero: v } })}
                   />
-                  <input
+                  <ImageField
+                    label="文章默认封面"
                     value={siteDraft.images.defaultPostCover}
-                    onChange={(e) =>
-                      setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, defaultPostCover: e.target.value } })
-                    }
-                    placeholder="文章默认封面 URL"
+                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, defaultPostCover: v } })}
                   />
                 </div>
               </div>
@@ -706,12 +693,10 @@ export function AdminSettingsPage() {
               <div>
                 <div className="widget-title">侧边栏作者卡片</div>
                 <div style={{ display: "grid", gap: 12 }}>
-                  <input
+                  <ImageField
+                    label="头像"
                     value={siteDraft.sidebar.avatarUrl}
-                    onChange={(e) =>
-                      setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, avatarUrl: e.target.value } })
-                    }
-                    placeholder="头像 URL"
+                    onChange={(v) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, avatarUrl: v } })}
                   />
                   <input
                     value={siteDraft.sidebar.name}
@@ -856,6 +841,47 @@ export function AdminSettingsPage() {
                     onChange={(v) => setSiteDraft({ ...siteDraft, about: { ...siteDraft.about, contentMd: v } })}
                     minHeight={360}
                   />
+                </div>
+              </div>
+
+              <div>
+                <div className="widget-title">防盗链</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={siteDraft.security.hotlink.enabled}
+                      onChange={(e) =>
+                        setSiteDraft({
+                          ...siteDraft,
+                          security: { ...siteDraft.security, hotlink: { ...siteDraft.security.hotlink, enabled: e.target.checked } },
+                        })
+                      }
+                      style={{ width: "auto" }}
+                    />
+                    <span>开启图片防盗链（阻止非允许站点直接引用 /uploads）</span>
+                  </label>
+                  <textarea
+                    value={siteDraft.security.hotlink.allowedOrigins.join("\n")}
+                    onChange={(e) =>
+                      setSiteDraft({
+                        ...siteDraft,
+                        security: {
+                          ...siteDraft.security,
+                          hotlink: {
+                            ...siteDraft.security.hotlink,
+                            allowedOrigins: e.target.value
+                              .split("\n")
+                              .map((s) => s.trim())
+                              .filter(Boolean),
+                          },
+                        },
+                      })
+                    }
+                    placeholder={"允许的 Origin（每行一个），例如：\nhttps://yourdomain.com\nhttps://cdn.yourdomain.com"}
+                    rows={4}
+                  />
+                  <div className="muted">不填写则仅允许本站域名引用；无 Referer 的请求默认放行。</div>
                 </div>
               </div>
 

@@ -518,6 +518,12 @@ export type SiteSettings = {
     title: string;
     subtitle: string;
   };
+  security: {
+    hotlink: {
+      enabled: boolean;
+      allowedOrigins: string[];
+    };
+  };
   images: {
     homeHero: string;
     archiveHero: string;
@@ -543,6 +549,12 @@ export const defaultSiteSettings = (): SiteSettings => ({
   home: {
     title: "YaBlog",
     subtitle: "Minimal · Elegant · Powerful",
+  },
+  security: {
+    hotlink: {
+      enabled: false,
+      allowedOrigins: [],
+    },
   },
   images: {
     homeHero: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80",
@@ -575,6 +587,14 @@ const mergeSiteSettings = (base: SiteSettings, incoming: any): SiteSettings => {
     home: {
       title: String(safe?.home?.title ?? base.home.title),
       subtitle: String(safe?.home?.subtitle ?? base.home.subtitle),
+    },
+    security: {
+      hotlink: {
+        enabled: Boolean(safe?.security?.hotlink?.enabled ?? base.security.hotlink.enabled),
+        allowedOrigins: Array.isArray(safe?.security?.hotlink?.allowedOrigins)
+          ? safe.security.hotlink.allowedOrigins.map((v: any) => String(v)).filter(Boolean)
+          : base.security.hotlink.allowedOrigins,
+      },
     },
     images: {
       homeHero: String(safe?.images?.homeHero ?? base.images.homeHero),

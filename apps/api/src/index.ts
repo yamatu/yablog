@@ -8,6 +8,7 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import multer from "multer";
+import sharp from "sharp";
 import tar from "tar";
 import { z } from "zod";
 
@@ -52,6 +53,8 @@ try {
 let isRestoring = false;
 let isBackingUp = false;
 
+let siteCache = getSiteSettings(db);
+
 type BackupManifest = {
   version: 1;
   createdAt: string;
@@ -84,6 +87,39 @@ const isValidSqliteFile = (filePath: string) => {
   fs.readSync(fd, header, 0, 16, 0);
   fs.closeSync(fd);
   return header.subarray(0, 15).toString("utf8").startsWith("SQLite format 3");
+};
+
+const safeUploadName = (value: string) => {
+  const name = path.basename(value);
+  if (!name || name !== value) return null;
+  if (name.startsWith(".")) return null;
+  if (name.includes("..")) return null;
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) return null;
+  if (name === "_thumbs") return null;
+  return name;
+};
+
+const thumbsDir = path.join(uploadsDir, "_thumbs");
+fs.mkdirSync(thumbsDir, { recursive: true });
+const thumbNameFor = (name: string) => `t_${name}.webp`;
+
+const imageTmpDir = path.join(os.tmpdir(), "yablog_upload_images");
+fs.mkdirSync(imageTmpDir, { recursive: true });
+
+const optimizeAndWriteImage = async (inputPath: string, outPath: string, outExt: string) => {
+  const img = sharp(inputPath).rotate().resize({ width: 2400, withoutEnlargement: true });
+  if (outExt === ".jpg" || outExt === ".jpeg") return img.jpeg({ quality: 82, mozjpeg: true }).toFile(outPath);
+  if (outExt === ".png") return img.png({ compressionLevel: 9 }).toFile(outPath);
+  if (outExt === ".avif") return img.avif({ quality: 50 }).toFile(outPath);
+  return img.webp({ quality: 82 }).toFile(outPath);
+};
+
+const writeThumb = async (inputPath: string, outPath: string) => {
+  await sharp(inputPath)
+    .rotate()
+    .resize({ width: 640, withoutEnlargement: true })
+    .webp({ quality: 72 })
+    .toFile(outPath);
 };
 
 if (!hasAnyUsers(db)) {
@@ -143,13 +179,11 @@ app.use((req, res, next) => {
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 app.get("/api/site", (_req, res) => {
-  const site = getSiteSettings(db);
-  res.json({ site });
+  res.json({ site: siteCache });
 });
 
 app.get("/api/about", (_req, res) => {
-  const site = getSiteSettings(db);
-  res.json({ about: site.about, heroImage: site.images.aboutHero });
+  res.json({ about: siteCache.about, heroImage: siteCache.images.aboutHero });
 });
 
 app.post("/api/auth/login", async (req, res) => {
@@ -181,8 +215,35 @@ const publicRouter = express.Router();
 mountPublicRoutes(publicRouter, db);
 app.use("/api", publicRouter);
 
-// Serve uploaded images from the DB directory volume
-app.use("/uploads", express.static(uploadsDir));
+// Serve uploaded images from the DB directory volume (with optional hotlink protection)
+app.use("/uploads", (req, res, next) => {
+  const hotlink = siteCache.security?.hotlink;
+  if (!hotlink?.enabled) return next();
+
+  const raw = req.get("referer") ?? req.get("origin") ?? "";
+  if (!raw) return next(); // allow no-referer requests (apps, RSS readers, etc.)
+
+  try {
+    const ref = new URL(raw);
+    const origin = `${ref.protocol}//${ref.host}`;
+    const self = `${req.protocol}://${req.get("host")}`;
+    const allowed = new Set([self, ...(hotlink.allowedOrigins ?? [])]);
+    if (allowed.has(origin)) return next();
+    res.setHeader("connection", "close");
+    return res.status(403).send("forbidden");
+  } catch {
+    return next();
+  }
+});
+app.use(
+  "/uploads",
+  express.static(uploadsDir, {
+    maxAge: "1h",
+    setHeaders: (res) => {
+      res.setHeader("cache-control", "public, max-age=3600");
+    },
+  }),
+);
 
 const adminRouter = express.Router();
 adminRouter.use(requireAuth);
@@ -265,7 +326,7 @@ adminRouter.get("/backup/full", async (_req, res) => {
 });
 
 adminRouter.get("/site", (_req, res) => {
-  res.json({ site: getSiteSettings(db) });
+  res.json({ site: siteCache });
 });
 
 adminRouter.put("/site", (req: AuthedRequest, res) => {
@@ -273,6 +334,12 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
     home: z.object({
       title: z.string().min(1).max(80),
       subtitle: z.string().max(200),
+    }),
+    security: z.object({
+      hotlink: z.object({
+        enabled: z.boolean().default(false),
+        allowedOrigins: z.array(z.string().min(1)).default([]),
+      }),
     }),
     images: z.object({
       homeHero: z.string(),
@@ -299,6 +366,7 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
 
   const body = z.object({ site: siteSchema }).parse(req.body);
   setSiteSettings(db, body.site);
+  siteCache = body.site;
   res.json({ ok: true });
 });
 
@@ -308,11 +376,13 @@ const upload = multer({
 });
 
 const uploadImage = multer({
-  dest: uploadsDir,
+  dest: imageTmpDir,
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-adminRouter.post("/upload", uploadImage.single("file"), (req: AuthedRequest & { file?: any }, res) => {
+adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedRequest & { file?: any }, res) => {
+  const query = z.object({ replace: z.string().optional() }).parse(req.query);
+
   const file = req.file as
     | { filename: string; originalname: string; mimetype: string; path: string }
     | undefined;
@@ -321,11 +391,117 @@ adminRouter.post("/upload", uploadImage.single("file"), (req: AuthedRequest & { 
     fs.rmSync(file.path, { force: true });
     return res.status(400).json({ error: "image_only" });
   }
-  const ext = path.extname(file.originalname).toLowerCase() || ".img";
-  const finalName = `${file.filename}${ext}`;
-  fs.renameSync(file.path, path.join(uploadsDir, finalName));
-  const url = `/uploads/${encodeURIComponent(finalName)}`;
-  res.json({ ok: true, url });
+
+  const rawExt = path.extname(file.originalname).toLowerCase() || ".img";
+  const passthrough = rawExt === ".gif" || rawExt === ".svg";
+  const outExt = passthrough ? rawExt : ".webp";
+
+  const replaceName = query.replace ? safeUploadName(String(query.replace)) : null;
+  const targetName = replaceName ?? `${file.filename}${outExt}`;
+  const targetPath = path.join(uploadsDir, targetName);
+
+  if (replaceName) {
+    if (!fs.existsSync(targetPath)) {
+      fs.rmSync(file.path, { force: true });
+      return res.status(404).json({ error: "not_found" });
+    }
+  }
+
+  const targetExt = path.extname(targetName).toLowerCase();
+  const tmpOut = path.join(os.tmpdir(), `yablog_img_${Date.now()}_${Math.random().toString(16).slice(2)}${targetExt || ".img"}`);
+
+  try {
+    if (targetExt === ".gif" || targetExt === ".svg") {
+      fs.rmSync(targetPath, { force: true });
+      fs.renameSync(file.path, targetPath);
+    } else {
+      try {
+        await optimizeAndWriteImage(file.path, tmpOut, targetExt);
+        fs.rmSync(targetPath, { force: true });
+        fs.renameSync(tmpOut, targetPath);
+        fs.rmSync(file.path, { force: true });
+      } catch {
+        // If optimization fails (e.g. HEIC), fall back to keeping the original file/ext for NEW uploads.
+        if (replaceName) throw new Error("replace_optimize_failed");
+        const fallbackName = `${file.filename}${rawExt}`;
+        const fallbackPath = path.join(uploadsDir, fallbackName);
+        fs.rmSync(fallbackPath, { force: true });
+        fs.renameSync(file.path, fallbackPath);
+
+        try {
+          await writeThumb(fallbackPath, path.join(thumbsDir, thumbNameFor(fallbackName)));
+        } catch {
+          // ignore thumb errors
+        }
+
+        const url = `/uploads/${encodeURIComponent(fallbackName)}`;
+        return res.json({ ok: true, url });
+      }
+    }
+
+    // Best-effort thumb generation (skip svg/gif)
+    if (targetExt !== ".svg" && targetExt !== ".gif") {
+      const tpath = path.join(thumbsDir, thumbNameFor(targetName));
+      try {
+        await writeThumb(targetPath, tpath);
+      } catch {
+        // ignore thumb errors
+      }
+    }
+
+    const url = `/uploads/${encodeURIComponent(targetName)}`;
+    res.json({ ok: true, url });
+  } catch (e) {
+    fs.rmSync(file.path, { force: true });
+    fs.rmSync(tmpOut, { force: true });
+    // eslint-disable-next-line no-console
+    console.error("[yablog-api] upload failed", e);
+    res.status(500).json({ error: "upload_failed" });
+  }
+});
+
+adminRouter.get("/uploads", (_req: AuthedRequest, res) => {
+  const items: { name: string; url: string; thumbUrl: string | null; size: number; updatedAt: string }[] = [];
+  for (const entry of fs.readdirSync(uploadsDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const name = entry.name;
+    if (name === "db.sqlite") continue;
+    if (name.startsWith(".")) continue;
+    if (name === "README") continue;
+    if (name === "db.sqlite-wal" || name === "db.sqlite-shm") continue;
+    if (name === "_thumbs") continue;
+    if (name.startsWith("t_") && name.endsWith(".webp")) continue;
+    // ignore thumbs (stored in _thumbs anyway)
+
+    const full = path.join(uploadsDir, name);
+    const stat = fs.statSync(full);
+    const thumbPath = path.join(thumbsDir, thumbNameFor(name));
+    const thumbUrl = fs.existsSync(thumbPath)
+      ? `/uploads/_thumbs/${encodeURIComponent(thumbNameFor(name))}`
+      : null;
+    items.push({
+      name,
+      url: `/uploads/${encodeURIComponent(name)}`,
+      thumbUrl,
+      size: stat.size,
+      updatedAt: stat.mtime.toISOString(),
+    });
+  }
+  items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  res.json({ items });
+});
+
+adminRouter.delete("/uploads/:name", (req: AuthedRequest, res) => {
+  const { name: raw } = z.object({ name: z.string().min(1) }).parse(req.params);
+  const name = safeUploadName(raw);
+  if (!name) return res.status(400).json({ error: "invalid_name" });
+
+  const target = path.join(uploadsDir, name);
+  if (!fs.existsSync(target)) return res.status(404).json({ error: "not_found" });
+
+  fs.rmSync(target, { force: true });
+  fs.rmSync(path.join(thumbsDir, thumbNameFor(name)), { force: true });
+  res.json({ ok: true });
 });
 
 adminRouter.post("/restore", upload.single("file"), async (req: AuthedRequest & { file?: any }, res) => {
