@@ -89,43 +89,28 @@ export function HomePage() {
       {/* Main Content Area */}
       <div id="content" className="main-content">
         <div className="post-list">
-          {err ? <div className="card" style={{ padding: 20 }}>加载失败：{err}</div> : null}
+          {err ? <div className="card" style={{ padding: 18 }}>加载失败：{err}</div> : null}
 
-          {pinned.length ? (
-            <div className="card" style={{ padding: 22, marginBottom: 16 }}>
-              <div className="widget-title" style={{ marginBottom: 14 }}>置顶文章</div>
-              <div style={{ display: "grid", gap: 14 }}>
-                {pinned.map((p, index) => (
-                  <PostCard key={p.id} post={p} index={index} />
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {/* 置顶只在卡片左上角显示，不做额外区块标题；仅第一页展示 */}
+          {page === 1
+            ? pinned.map((p, index) => <PostCard key={p.id} post={p} index={index} />)
+            : null}
+          {posts.map((p, index) => (
+            <PostCard key={p.id} post={p} index={index + pinned.length} />
+          ))}
 
-          <div className="card" style={{ padding: 22 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <div className="widget-title" style={{ margin: 0 }}>最新文章</div>
-              <Link to="/archive" className="muted">查看全部 →</Link>
-            </div>
-            <div style={{ height: 14 }} />
-            <div style={{ display: "grid", gap: 14 }}>
-              {posts.map((p, index) => (
-                <PostCard key={p.id} post={p} index={index} />
-              ))}
-              {!posts.length && !loading ? <div className="muted" style={{ padding: 16 }}>暂无文章</div> : null}
-            </div>
+          {!posts.length && !loading ? <div className="muted" style={{ padding: 16 }}>暂无文章</div> : null}
 
-            <div className="pager">
-              <button onClick={() => goToPage(page - 1)} disabled={loading || page <= 1}>
-                上一页
-              </button>
-              <div className="muted">
-                第 {page} / {totalPages} 页
-              </div>
-              <button onClick={() => goToPage(page + 1)} disabled={loading || page >= totalPages}>
-                下一页
-              </button>
+          <div className="pager pagerFloat">
+            <button onClick={() => goToPage(page - 1)} disabled={loading || page <= 1}>
+              上一页
+            </button>
+            <div className="muted">
+              第 {page} / {totalPages} 页
             </div>
+            <button onClick={() => goToPage(page + 1)} disabled={loading || page >= totalPages}>
+              下一页
+            </button>
           </div>
 
         </div>

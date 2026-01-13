@@ -628,6 +628,18 @@ a:hover {
   cursor: not-allowed;
 }
 
+.pagerFloat {
+  border-top: none;
+  padding: 14px 14px;
+  margin-top: 22px;
+  border-radius: var(--radius);
+  background: var(--card2);
+  box-shadow: var(--shadow);
+  position: sticky;
+  bottom: 18px;
+  backdrop-filter: blur(10px);
+}
+
 /* Widgets */
 .widget {
   background: var(--card);
