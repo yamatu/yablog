@@ -141,6 +141,7 @@ body {
   color: var(--text);
   line-height: 2;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 a {
@@ -1197,6 +1198,19 @@ button:hover,
 .markdown table code {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* KaTeX: prevent long formulas from breaking mobile layout */
+.markdown .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown .katex-display > .katex {
+  display: inline-block;
+  padding: 0 2px;
 }
 
 .markdown .codeBlock {
