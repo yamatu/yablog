@@ -617,7 +617,7 @@ a:hover {
 }
 
 /* Mobile Responsive */
-@media (max-width: 900px) {
+@media (max-width: 820px) {
   .main-content {
     flex-direction: column;
   }
@@ -1092,6 +1092,9 @@ button:hover,
 }
 
 @media (max-width: 820px) {
+  body {
+    overflow-x: hidden;
+  }
   .butterfly-hero,
   .page-banner,
   .post-header {
@@ -1204,7 +1207,7 @@ button:hover,
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   max-width: 100%;
-  scrollbar-gutter: stable;
+  width: 100%;
 }
 
 .markdown .codeBlock code {
