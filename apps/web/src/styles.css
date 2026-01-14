@@ -1151,8 +1151,9 @@ button:hover,
 .markdown .codeBlockBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--code-border);
   background: color-mix(in oklab, var(--code-bg) 92%, transparent);
@@ -1163,7 +1164,9 @@ button:hover,
   font-size: 12px;
   letter-spacing: 0.2px;
   color: color-mix(in oklab, var(--code-text) 70%, transparent);
-  max-width: 65%;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1173,7 +1176,7 @@ button:hover,
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 7px 9px;
   border-radius: 10px;
   border: 1px solid var(--code-border);
   background: transparent;
@@ -1191,6 +1194,10 @@ button:hover,
 .markdown .codeCopyBtn svg {
   width: 18px;
   height: 18px;
+}
+
+.markdown .codeCopyText {
+  display: none;
 }
 
 .markdown .codeBlock pre {
@@ -1234,23 +1241,20 @@ button:hover,
   transform: translateY(0);
 }
 
-@media (max-width: 520px) {
+@media (min-width: 680px) {
+  .markdown .codeCopyText {
+    display: inline;
+  }
+}
+
+@media (max-width: 680px) {
   .markdown .codeBlockBar {
     padding: 8px 10px;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-  .markdown .codeBlockLang {
-    max-width: 100%;
-    flex: 1 0 100%;
+    gap: 8px;
   }
   .markdown .codeCopyBtn {
     padding: 7px 9px;
     border-radius: 10px;
-  }
-  .markdown .codeCopyText {
-    display: none;
   }
   .markdown .codeBlock pre {
     padding: 12px 12px 14px;
