@@ -992,6 +992,28 @@ button:hover,
   .adminRoot .glass {
     padding: 18px !important;
   }
+  .adminSettingsGrid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .adminSettingsCard {
+    padding: 18px !important;
+  }
+  .adminSectionTitle {
+    font-size: 16px !important;
+    margin-bottom: 14px !important;
+  }
+  .adminRoot input,
+  .adminRoot textarea,
+  .adminRoot select {
+    font-size: 16px;
+  }
+  .adminRoot .btn-follow {
+    border-radius: 12px;
+    min-height: 40px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
   .adminEditorColumns {
     grid-template-columns: 1fr !important;
   }
@@ -1030,6 +1052,14 @@ button:hover,
     padding: 8px 10px !important;
     min-height: 34px !important;
     font-size: 13px !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .butterfly-hero,
+  .page-banner,
+  .post-header {
+    background-position: 50% 50% !important;
   }
 }
 

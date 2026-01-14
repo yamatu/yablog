@@ -673,9 +673,9 @@ export function AdminSettingsPage() {
           </div>
         </div>
 
-        <div className="grid">
-          <div className="card" style={{ padding: 30 }}>
-            <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>修改账户信息</div>
+        <div className="grid adminSettingsGrid">
+          <div className="card adminSettingsCard" style={{ padding: 30 }}>
+            <div className="adminSectionTitle" style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>修改账户信息</div>
             <div style={{ display: 'grid', gap: 15 }}>
               <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="当前授权密码" />
               <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="新用户名 (留空不改)" />
@@ -689,8 +689,8 @@ export function AdminSettingsPage() {
             </div>
           </div>
 
-          <div className="card" style={{ padding: 30 }}>
-            <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>数据维护</div>
+          <div className="card adminSettingsCard" style={{ padding: 30 }}>
+            <div className="adminSectionTitle" style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>数据维护</div>
 
             <div style={{ marginBottom: 30 }}>
               <div className="muted" style={{ marginBottom: 10 }}>备份全部文章和数据</div>
@@ -700,7 +700,7 @@ export function AdminSettingsPage() {
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20 }}>
               <div className="muted" style={{ marginBottom: 10 }}>恢复数据 (危险操作)</div>
               <input type="file" onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)} accept=".db,.gz,.db.gz" style={{ display: 'block', marginBottom: 10 }} />
-              <button onClick={onRestore} disabled={restoreBusy || !restoreFile} style={{ background: '#ff4d4f' }}>
+              <button className="btn-danger" onClick={onRestore} disabled={restoreBusy || !restoreFile}>
                 {restoreBusy ? "恢复中..." : "覆盖并恢复数据"}
               </button>
               {restoreMsg ? <div style={{ marginTop: 10, color: 'blue' }}>{restoreMsg}</div> : null}
@@ -716,7 +716,7 @@ export function AdminSettingsPage() {
                 accept=".tar.gz,application/gzip"
                 style={{ display: 'block', marginBottom: 10 }}
               />
-              <button onClick={onRestoreFull} disabled={restoreFullBusy || !restoreFullFile} style={{ background: '#ff4d4f' }}>
+              <button className="btn-danger" onClick={onRestoreFull} disabled={restoreFullBusy || !restoreFullFile}>
                 {restoreFullBusy ? "全量恢复中..." : "上传并全量恢复"}
               </button>
               {restoreFullMsg ? <div style={{ marginTop: 10, color: 'blue' }}>{restoreFullMsg}</div> : null}
@@ -726,8 +726,8 @@ export function AdminSettingsPage() {
         </div>
 
         <div style={{ height: 22 }} />
-        <div className="card" style={{ padding: 30 }}>
-          <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>站点外观与内容</div>
+        <div className="card adminSettingsCard" style={{ padding: 30 }}>
+          <div className="adminSectionTitle" style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>站点外观与内容</div>
           {!siteDraft ? (
             <div className="muted">加载站点设置中…</div>
           ) : (
