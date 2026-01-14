@@ -641,6 +641,14 @@ a:hover {
 @media (max-width: 720px) {
   .main-content {
     flex-direction: column;
+    /* In column layout, stretch children to full width (otherwise flex-start makes them shrink-to-fit and overflow). */
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .main-content > * {
+    width: 100%;
+    min-width: 0;
   }
 
   .sidebar {
