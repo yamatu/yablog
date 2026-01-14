@@ -61,6 +61,12 @@ export type LinkRequest = {
   createdAt: string;
 };
 
+export type IpBan = {
+  ip: string;
+  reason: string;
+  createdAt: string;
+};
+
 const nowIso = () => new Date().toISOString();
 
 export const openDb = (): Db => {
@@ -173,6 +179,12 @@ export const initDb = (db: Db) => {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_link_requests_status_created ON link_requests(status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ip_bans (
+      ip TEXT PRIMARY KEY,
+      reason TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
   `);
 };
 
@@ -365,6 +377,28 @@ export const updateLinkRequestAdmin = (db: Db, args: { id: number; status: "pend
 
 export const deleteLinkRequestAdmin = (db: Db, id: number) => {
   db.prepare("DELETE FROM link_requests WHERE id = ?").run(id);
+};
+
+export const listIpBans = (db: Db) => {
+  const rows = db
+    .prepare("SELECT ip, reason, created_at as createdAt FROM ip_bans ORDER BY created_at DESC LIMIT 5000")
+    .all() as any[];
+  return rows as IpBan[];
+};
+
+export const upsertIpBan = (db: Db, args: { ip: string; reason: string }) => {
+  const now = nowIso();
+  db.prepare(
+    `
+    INSERT INTO ip_bans (ip, reason, created_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(ip) DO UPDATE SET reason = excluded.reason
+    `,
+  ).run(args.ip, args.reason, now);
+};
+
+export const deleteIpBan = (db: Db, ip: string) => {
+  db.prepare("DELETE FROM ip_bans WHERE ip = ?").run(ip);
 };
 
 const hasColumn = (db: Db, table: string, column: string) => {

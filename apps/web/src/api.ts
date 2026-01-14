@@ -52,6 +52,19 @@ export type LinkRequest = {
   createdAt: string;
 };
 
+export type SuspiciousIp = {
+  ip: string;
+  score: number;
+  lastSeen: string;
+  counts: Record<string, number>;
+};
+
+export type IpBan = {
+  ip: string;
+  reason: string;
+  createdAt: string;
+};
+
 export type SiteSettings = {
   nav: {
     brandText: string;
@@ -122,6 +135,7 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
       if (err === "blocked_host") throw new Error("该站点地址不允许访问（安全限制）");
       if (err === "invalid_url") throw new Error("URL 不合法");
       if (err === "rate_limited") throw new Error("请求过于频繁，请稍后再试");
+      if (err === "ip_banned") throw new Error("你的 IP 已被封禁");
       if (err) throw new Error(err);
       throw new Error(`HTTP ${res.status}`);
     }
@@ -372,4 +386,26 @@ export const api = {
     u.searchParams.set("url", url);
     return json<{ iconUrl: string }>(u);
   },
+
+  adminListSuspiciousIps: (args?: { limit?: number }) => {
+    const u = new URL("/api/admin/security/suspicious", window.location.origin);
+    if (args?.limit) u.searchParams.set("limit", String(args.limit));
+    return json<{ redisEnabled: boolean; items: SuspiciousIp[] }>(u);
+  },
+
+  adminListIpBans: () => json<{ items: IpBan[] }>("/api/admin/security/bans"),
+
+  adminBanIps: (payload: { ips: string[]; reason?: string }) =>
+    json<{ ok: true; added: number; invalid: string[] }>("/api/admin/security/bans", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminUnbanIps: (payload: { ips: string[] }) =>
+    json<{ ok: true; removed: number; invalid: string[] }>("/api/admin/security/bans/unban", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 };

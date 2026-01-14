@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -17,15 +18,18 @@ import { createCache } from "./cache.js";
 import { config } from "./config.js";
 import {
   defaultSiteSettings,
+  deleteIpBan,
   ensureAdminUser,
   getFirstUser,
   getSiteSettings,
   getUserById,
   hasAnyUsers,
   initDb,
+  listIpBans,
   migrateDb,
   openDb,
   setSiteSettings,
+  upsertIpBan,
   updateUserCredentials,
 } from "./db.js";
 import { requireAuth, type AuthedRequest } from "./middleware.js";
@@ -57,6 +61,14 @@ let isRestoring = false;
 let isBackingUp = false;
 
 let siteCache = getSiteSettings(db);
+
+const ipKey = (ip: string | undefined | null) => (ip ?? "").replace("::ffff:", "") || "unknown";
+let bannedIpSet = new Set<string>();
+try {
+  bannedIpSet = new Set(listIpBans(db).map((b) => b.ip));
+} catch {
+  bannedIpSet = new Set();
+}
 
 type BackupManifest = {
   version: 1;
@@ -170,6 +182,14 @@ if (!hasAnyUsers(db)) {
 
 const app = express();
 app.set("trust proxy", true);
+app.use((req, res, next) => {
+  const ip = ipKey(req.ip);
+  if (bannedIpSet.has(ip)) {
+    res.setHeader("connection", "close");
+    return res.status(403).json({ error: "ip_banned" });
+  }
+  return next();
+});
 app.use(
   helmet({
     // We allow users to configure remote images (Unsplash/DiceBear/any https URL), so the strict defaults
@@ -283,6 +303,83 @@ app.use(
 
 const adminRouter = express.Router();
 adminRouter.use(requireAuth);
+
+adminRouter.get("/security/suspicious", async (req, res) => {
+  const q = z.object({ limit: z.string().optional() }).parse(req.query);
+  const limit = Math.min(1000, Math.max(1, Number.parseInt(q.limit ?? "200", 10) || 200));
+  const items = cache.enabled ? await cache.listSuspiciousIps({ limit }) : [];
+  res.json({ redisEnabled: cache.enabled, items });
+});
+
+adminRouter.get("/security/suspicious.csv", async (req, res) => {
+  const q = z.object({ limit: z.string().optional() }).parse(req.query);
+  const limit = Math.min(5000, Math.max(1, Number.parseInt(q.limit ?? "2000", 10) || 2000));
+  const items = cache.enabled ? await cache.listSuspiciousIps({ limit }) : [];
+
+  const esc = (v: string) => `"${String(v).replaceAll('"', '""')}"`;
+  const lines = ["ip,score,lastSeen,counts_json"];
+  for (const it of items) {
+    lines.push([esc(it.ip), String(it.score), esc(it.lastSeen || ""), esc(JSON.stringify(it.counts ?? {}))].join(","));
+  }
+
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `yablog-suspicious-ips-${ts}.csv`;
+  res.setHeader("content-type", "text/csv; charset=utf-8");
+  res.setHeader("content-disposition", `attachment; filename="${filename}"`);
+  res.setHeader("cache-control", "no-store");
+  // UTF-8 BOM for Excel compatibility
+  res.send(`\uFEFF${lines.join("\n")}\n`);
+});
+
+adminRouter.get("/security/bans", (_req, res) => {
+  res.json({ items: listIpBans(db) });
+});
+
+adminRouter.post("/security/bans", (req, res) => {
+  const body = z
+    .object({
+      ips: z.array(z.string().min(1)).min(1).max(500),
+      reason: z.string().max(200).optional().default(""),
+    })
+    .parse(req.body);
+
+  const normalized: string[] = [];
+  const invalid: string[] = [];
+  for (const raw of body.ips) {
+    const ip = ipKey(raw);
+    if (!net.isIP(ip)) {
+      invalid.push(raw);
+      continue;
+    }
+    normalized.push(ip);
+  }
+
+  for (const ip of normalized) {
+    upsertIpBan(db, { ip, reason: body.reason ?? "" });
+    bannedIpSet.add(ip);
+  }
+
+  res.json({ ok: true, added: normalized.length, invalid });
+});
+
+adminRouter.post("/security/bans/unban", (req, res) => {
+  const body = z.object({ ips: z.array(z.string().min(1)).min(1).max(500) }).parse(req.body);
+  const normalized: string[] = [];
+  const invalid: string[] = [];
+  for (const raw of body.ips) {
+    const ip = ipKey(raw);
+    if (!net.isIP(ip)) {
+      invalid.push(raw);
+      continue;
+    }
+    normalized.push(ip);
+  }
+  for (const ip of normalized) {
+    deleteIpBan(db, ip);
+    bannedIpSet.delete(ip);
+  }
+  res.json({ ok: true, removed: normalized.length, invalid });
+});
 
 adminRouter.get("/backup", async (_req, res) => {
   if (isRestoring) return res.status(503).json({ error: "restarting" });

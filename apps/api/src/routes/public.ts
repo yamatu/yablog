@@ -57,16 +57,23 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
 
     if (!q) return res.json({ items: [], total: 0, page, limit, recommendations: [] });
 
-    const rl = await cache.rateLimit({ bucket: "search", key: ipKey(req.ip), limit: 60, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "search", key: ip, limit: 60, windowSec: 60 }),
+      cache.rateLimit({ bucket: "search:g", key: "global", limit: 800, windowSec: 60 }),
+    ]);
+
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("search", { q, page, limit });
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "search", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         return res.json(cached);
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "search", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
 
@@ -87,16 +94,23 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
     const { slug } = z.object({ slug: z.string().min(1) }).parse(req.params);
     const post = getPostBySlug(db, slug);
     if (!post || post.status !== "published") return res.status(404).json({ error: "not_found" });
-    const rl = await cache.rateLimit({ bucket: "comments", key: ipKey(req.ip), limit: 120, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "comments", key: ip, limit: 120, windowSec: 60 }),
+      cache.rateLimit({ bucket: "comments:g", key: "global", limit: 1600, windowSec: 60 }),
+    ]);
+
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("comments", { slug });
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "comments", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         return res.json(cached);
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "comments", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
     const data = await cache.wrapJSON("comments", { slug }, 30, () => listApprovedCommentsByPostSlug(db, slug));
@@ -148,16 +162,23 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
     const featured = parseBool(query.pinned ?? query.featured);
 
     const raw = { page, limit, q: query.q ?? "", tag: query.tag ?? "", category: query.category ?? "", featured: featured ?? null };
-    const rl = await cache.rateLimit({ bucket: "posts", key: ipKey(req.ip), limit: 120, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "posts", key: ip, limit: 120, windowSec: 60 }),
+      cache.rateLimit({ bucket: "posts:g", key: "global", limit: 2000, windowSec: 60 }),
+    ]);
+
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("posts", raw);
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "posts", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         return res.json(cached);
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "posts", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
 
@@ -183,17 +204,23 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
 
   router.get("/posts/:slug", async (req, res) => {
     const { slug } = z.object({ slug: z.string().min(1) }).parse(req.params);
-    const rl = await cache.rateLimit({ bucket: "post", key: ipKey(req.ip), limit: 240, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "post", key: ip, limit: 240, windowSec: 60 }),
+      cache.rateLimit({ bucket: "post:g", key: "global", limit: 3000, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("posts", { slug });
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "post", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         if (!cached || cached.status !== "published") return res.status(404).json({ error: "not_found" });
         return res.json({ post: cached });
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "post", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
     const post = await cache.wrapJSON("posts", { slug }, 60, () => getPostBySlug(db, slug));
@@ -202,16 +229,22 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
   });
 
   router.get("/tags", async (_req, res) => {
-    const rl = await cache.rateLimit({ bucket: "tags", key: ipKey(_req.ip), limit: 240, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(_req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "tags", key: ip, limit: 240, windowSec: 60 }),
+      cache.rateLimit({ bucket: "tags:g", key: "global", limit: 3000, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("tags", { v: 1 });
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "tags", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         return res.json(cached);
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "tags", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
     const data = await cache.wrapJSON("tags", { v: 1 }, 300, () => ({ items: listTags(db) }));
@@ -219,16 +252,22 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
   });
 
   router.get("/categories", async (_req, res) => {
-    const rl = await cache.rateLimit({ bucket: "categories", key: ipKey(_req.ip), limit: 240, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(_req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "categories", key: ip, limit: 240, windowSec: 60 }),
+      cache.rateLimit({ bucket: "categories:g", key: "global", limit: 3000, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("categories", { v: 1 });
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "categories", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         return res.json(cached);
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "categories", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
     const data = await cache.wrapJSON("categories", { v: 1 }, 300, () => ({ items: listCategories(db) }));
@@ -236,16 +275,22 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
   });
 
   router.get("/links", async (_req, res) => {
-    const rl = await cache.rateLimit({ bucket: "links", key: ipKey(_req.ip), limit: 240, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(_req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "links", key: ip, limit: 240, windowSec: 60 }),
+      cache.rateLimit({ bucket: "links:g", key: "global", limit: 2000, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("links", { v: 1 });
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "links", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         return res.json(cached);
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "links", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
     const data = await cache.wrapJSON("links", { v: 1 }, 120, () => ({ items: listLinksPublic(db) }));
@@ -253,16 +298,22 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
   });
 
   router.get("/links/requests", async (_req, res) => {
-    const rl = await cache.rateLimit({ bucket: "linkRequests", key: ipKey(_req.ip), limit: 240, windowSec: 60 });
-    if (!rl.allowed) {
+    const ip = ipKey(_req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "linkRequests", key: ip, limit: 240, windowSec: 60 }),
+      cache.rateLimit({ bucket: "linkRequests:g", key: "global", limit: 2000, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
       const cached = await peek<any>("linkRequests", { v: 1 });
       if (cached) {
+        void cache.recordSuspicious({ ip, bucket: "linkRequests", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "cache" });
         res.setHeader("x-rate-limited", "1");
         res.setHeader("x-cache", "hit");
-        res.setHeader("retry-after", String(rl.resetSec));
+        res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
         return res.json(cached);
       }
-      res.setHeader("retry-after", String(rl.resetSec));
+      void cache.recordSuspicious({ ip, bucket: "linkRequests", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
       return res.status(429).json({ error: "rate_limited" });
     }
     const data = await cache.wrapJSON("linkRequests", { v: 1 }, 60, () => ({ items: listLinkRequestsPublic(db) }));

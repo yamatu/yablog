@@ -21,6 +21,7 @@ import {
   AdminLinksPage,
   AdminLoginPage,
   AdminMediaPage,
+  AdminSecurityPage,
   AdminSettingsPage,
 } from "./pages/admin/Admin";
 
@@ -48,6 +49,7 @@ export function App() {
             <Route path="/admin/media" element={<AdminMediaPage />} />
             <Route path="/admin/comments" element={<AdminCommentsPage />} />
             <Route path="/admin/links" element={<AdminLinksPage />} />
+            <Route path="/admin/security" element={<AdminSecurityPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
 
             <Route path="*" element={<HomePage />} />

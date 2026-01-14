@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { api, CommentAdminRow, Link as FriendLink, LinkRequest, Post, User } from "../../api";
+import { api, CommentAdminRow, IpBan, Link as FriendLink, LinkRequest, Post, SuspiciousIp, User } from "../../api";
 import { ImageField } from "../../components/ImageField";
 import { Markdown } from "../../components/Markdown";
 import { MediaLibraryPanel } from "../../components/MediaLibraryModal";
@@ -198,6 +198,7 @@ function AdminDashboard({ user }: { user: User }) {
           <button className="btn-ghost" onClick={() => navigate("/admin/media")}>图库</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/comments")}>评论</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/links")}>友链</button>
+          <button className="btn-ghost" onClick={() => navigate("/admin/security")}>安全</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/settings")}>设置</button>
           <button className="btn-ghost" onClick={onLogout}>退出</button>
         </div>
@@ -2143,6 +2144,319 @@ function AdminLinksPanel() {
                 ) : null}
               </div>
             ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function AdminSecurityPage() {
+  const { user, loading } = useMe();
+  const location = useLocation();
+  if (loading) return <div className="container" style={{ padding: "26px 0" }}>加载中…</div>;
+  if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  return (
+    <AdminLayoutWrapper>
+      <AdminSecurityPanel />
+    </AdminLayoutWrapper>
+  );
+}
+
+function AdminSecurityPanel() {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<"suspicious" | "bans">("suspicious");
+
+  const [suspicious, setSuspicious] = useState<SuspiciousIp[]>([]);
+  const [susRedisEnabled, setSusRedisEnabled] = useState<boolean>(false);
+  const [susErr, setSusErr] = useState<string | null>(null);
+  const [susLoading, setSusLoading] = useState(true);
+  const [susSelected, setSusSelected] = useState<Set<string>>(() => new Set());
+
+  const [bans, setBans] = useState<IpBan[]>([]);
+  const [banErr, setBanErr] = useState<string | null>(null);
+  const [banLoading, setBanLoading] = useState(true);
+  const [banSelected, setBanSelected] = useState<Set<string>>(() => new Set());
+
+  const [reason, setReason] = useState("abuse");
+  const [manualIps, setManualIps] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const refreshSuspicious = useCallback(async () => {
+    setSusLoading(true);
+    setSusErr(null);
+    try {
+      const res = await api.adminListSuspiciousIps({ limit: 200 });
+      setSusRedisEnabled(res.redisEnabled);
+      setSuspicious(res.items);
+    } catch (e: any) {
+      setSusErr(e?.message ?? String(e));
+    } finally {
+      setSusLoading(false);
+    }
+  }, []);
+
+  const refreshBans = useCallback(async () => {
+    setBanLoading(true);
+    setBanErr(null);
+    try {
+      const res = await api.adminListIpBans();
+      setBans(res.items);
+    } catch (e: any) {
+      setBanErr(e?.message ?? String(e));
+    } finally {
+      setBanLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSuspicious();
+    refreshBans();
+  }, [refreshSuspicious, refreshBans]);
+
+  useEffect(() => {
+    setSusSelected((prev) => {
+      if (!prev.size) return prev;
+      const visible = new Set(suspicious.map((s) => s.ip));
+      const next = new Set<string>();
+      for (const ip of prev) if (visible.has(ip)) next.add(ip);
+      return next;
+    });
+  }, [suspicious]);
+
+  useEffect(() => {
+    setBanSelected((prev) => {
+      if (!prev.size) return prev;
+      const visible = new Set(bans.map((b) => b.ip));
+      const next = new Set<string>();
+      for (const ip of prev) if (visible.has(ip)) next.add(ip);
+      return next;
+    });
+  }, [bans]);
+
+  const doBan = async (ips: string[]) => {
+    if (!ips.length) return;
+    setBusy(true);
+    try {
+      await api.adminBanIps({ ips, reason: reason.trim() });
+      setSusSelected(new Set());
+      await refreshBans();
+    } catch (e: any) {
+      setBanErr(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doUnban = async (ips: string[]) => {
+    if (!ips.length) return;
+    setBusy(true);
+    try {
+      await api.adminUnbanIps({ ips });
+      setBanSelected(new Set());
+      await refreshBans();
+    } catch (e: any) {
+      setBanErr(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const suspiciousAllSelected = suspicious.length > 0 && suspicious.every((s) => susSelected.has(s.ip));
+  const bansAllSelected = bans.length > 0 && bans.every((b) => banSelected.has(b.ip));
+
+  return (
+    <div className="glass content">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>安全中心</h2>
+          <div className="muted">可疑 IP 统计（Redis）与批量封禁/导出</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button className="btn-ghost" onClick={() => navigate("/admin")}>返回控制台</button>
+          <button className={tab === "suspicious" ? "btn-primary" : "btn-ghost"} onClick={() => setTab("suspicious")}>可疑 IP</button>
+          <button className={tab === "bans" ? "btn-primary" : "btn-ghost"} onClick={() => setTab("bans")}>封禁列表</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 16, marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="muted">封禁原因</div>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="reason（可选）" style={{ width: 260 }} />
+          <div style={{ flex: 1 }} />
+          <button className="btn-ghost" disabled={busy} onClick={() => { refreshSuspicious(); refreshBans(); }}>刷新全部</button>
+          <button
+            className="btn-ghost"
+            disabled={busy || !susRedisEnabled}
+            onClick={() => window.location.assign("/api/admin/security/suspicious.csv?limit=2000")}
+            title="导出 CSV（可用于 nginx/waf 规则）"
+          >
+            导出可疑 IP CSV
+          </button>
+        </div>
+
+        <div style={{ height: 12 }} />
+        <div className="muted">手动封禁（每行一个 IP）</div>
+        <div style={{ height: 8 }} />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <textarea
+            value={manualIps}
+            onChange={(e) => setManualIps(e.target.value)}
+            placeholder={"例如：\n1.2.3.4\n2606:4700:4700::1111"}
+            rows={3}
+            style={{ flex: 1, minWidth: 320 }}
+          />
+          <button
+            className="btn-danger"
+            disabled={busy || !manualIps.trim()}
+            onClick={async () => {
+              const ips = manualIps
+                .split(/\r?\n/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              await doBan(ips);
+              setManualIps("");
+            }}
+          >
+            批量封禁
+          </button>
+        </div>
+        {banErr ? <div className="muted" style={{ color: "red", marginTop: 10 }}>{banErr}</div> : null}
+      </div>
+
+      {tab === "suspicious" ? (
+        <>
+          {!susRedisEnabled ? (
+            <div className="card" style={{ padding: 16 }}>
+              <div className="muted">未开启 Redis（`REDIS_URL` 为空），可疑 IP 统计不可用。</div>
+            </div>
+          ) : null}
+          {susErr ? <div className="muted" style={{ color: "red", marginBottom: 14 }}>错误：{susErr}</div> : null}
+          {susLoading ? <div className="muted">加载中…</div> : null}
+
+          <div className="adminBulkBar" style={{ marginBottom: 14 }}>
+            <label className="chkWrap">
+              <input
+                type="checkbox"
+                checked={suspiciousAllSelected}
+                onChange={() => {
+                  const all = suspiciousAllSelected;
+                  setSusSelected(() => {
+                    const next = new Set<string>();
+                    if (!all) for (const s of suspicious) next.add(s.ip);
+                    return next;
+                  });
+                }}
+              />
+              <span className="muted">全选</span>
+            </label>
+            <div className="muted">{susSelected.size ? `已选 ${susSelected.size} 个` : "未选择"}</div>
+            <div style={{ flex: 1 }} />
+            <button className="btn-ghost" disabled={!susSelected.size || busy} onClick={() => setSusSelected(new Set())}>清空</button>
+            <button className="btn-danger" disabled={!susSelected.size || busy} onClick={async () => {
+              if (!confirm(`确定封禁选中的 ${susSelected.size} 个 IP 吗？`)) return;
+              await doBan(Array.from(susSelected));
+            }}>封禁所选</button>
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {suspicious.map((s) => {
+              const topCounts = Object.entries(s.counts ?? {})
+                .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+                .slice(0, 4)
+                .map(([k, v]) => `${k}=${v}`)
+                .join(" · ");
+              return (
+                <div key={s.ip} className="card" style={{ padding: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <label className="chkWrap" title="选择">
+                    <input
+                      type="checkbox"
+                      checked={susSelected.has(s.ip)}
+                      onChange={() =>
+                        setSusSelected((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(s.ip)) next.delete(s.ip);
+                          else next.add(s.ip);
+                          return next;
+                        })
+                      }
+                    />
+                  </label>
+                  <div style={{ minWidth: 220, fontWeight: 800 }}>{s.ip}</div>
+                  <span className="pill">score {s.score}</span>
+                  <span className="muted" style={{ fontSize: 12 }}>{s.lastSeen ? new Date(s.lastSeen).toLocaleString("zh-CN") : ""}</span>
+                  <span className="muted" style={{ fontSize: 12, flex: 1, minWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {topCounts}
+                  </span>
+                  <button className="btn-ghost" disabled={busy} onClick={() => { setManualIps(s.ip); setTab("bans"); }}>复制到封禁</button>
+                </div>
+              );
+            })}
+            {!susLoading && susRedisEnabled && suspicious.length === 0 ? <div className="muted">暂无可疑 IP</div> : null}
+          </div>
+        </>
+      ) : (
+        <>
+          {banLoading ? <div className="muted">加载中…</div> : null}
+          {banErr ? <div className="muted" style={{ color: "red", marginBottom: 14 }}>错误：{banErr}</div> : null}
+
+          <div className="adminBulkBar" style={{ marginBottom: 14 }}>
+            <label className="chkWrap">
+              <input
+                type="checkbox"
+                checked={bansAllSelected}
+                onChange={() => {
+                  const all = bansAllSelected;
+                  setBanSelected(() => {
+                    const next = new Set<string>();
+                    if (!all) for (const b of bans) next.add(b.ip);
+                    return next;
+                  });
+                }}
+              />
+              <span className="muted">全选</span>
+            </label>
+            <div className="muted">{banSelected.size ? `已选 ${banSelected.size} 个` : "未选择"}</div>
+            <div style={{ flex: 1 }} />
+            <button className="btn-ghost" disabled={!banSelected.size || busy} onClick={() => setBanSelected(new Set())}>清空</button>
+            <button
+              className="btn-primary"
+              disabled={!banSelected.size || busy}
+              onClick={async () => {
+                if (!confirm(`确定解封选中的 ${banSelected.size} 个 IP 吗？`)) return;
+                await doUnban(Array.from(banSelected));
+              }}
+            >
+              批量解封
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {bans.map((b) => (
+              <div key={b.ip} className="card" style={{ padding: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <label className="chkWrap" title="选择">
+                  <input
+                    type="checkbox"
+                    checked={banSelected.has(b.ip)}
+                    onChange={() =>
+                      setBanSelected((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(b.ip)) next.delete(b.ip);
+                        else next.add(b.ip);
+                        return next;
+                      })
+                    }
+                  />
+                </label>
+                <div style={{ minWidth: 220, fontWeight: 900 }}>{b.ip}</div>
+                <span className="muted" style={{ fontSize: 12 }}>{b.createdAt ? new Date(b.createdAt).toLocaleString("zh-CN") : ""}</span>
+                <span className="muted" style={{ flex: 1, minWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {b.reason || "—"}
+                </span>
+                <button className="btn-ghost" disabled={busy} onClick={() => doUnban([b.ip])}>解封</button>
+              </div>
+            ))}
+            {!banLoading && bans.length === 0 ? <div className="muted">暂无封禁</div> : null}
           </div>
         </>
       )}
