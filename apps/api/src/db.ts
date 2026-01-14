@@ -30,6 +30,37 @@ export type Post = {
   categories: string[];
 };
 
+export type Comment = {
+  id: number;
+  postId: number;
+  author: string;
+  contentMd: string;
+  status: "pending" | "approved";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Link = {
+  id: number;
+  title: string;
+  url: string;
+  description: string;
+  iconUrl: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LinkRequest = {
+  id: number;
+  name: string;
+  url: string;
+  description: string;
+  message: string;
+  status: "pending" | "approved";
+  createdAt: string;
+};
+
 const nowIso = () => new Date().toISOString();
 
 export const openDb = (): Db => {
@@ -97,7 +128,243 @@ export const initDb = (db: Db) => {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS captchas (
+      id TEXT PRIMARY KEY,
+      answer TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      author TEXT NOT NULL,
+      content_md TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved')),
+      ip TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_comments_post_status_created ON comments(post_id, status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      url TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL DEFAULT '',
+      icon_url TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_links_sort ON links(sort_order DESC, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS link_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved')),
+      ip TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_link_requests_status_created ON link_requests(status, created_at DESC);
   `);
+};
+
+export const createCaptcha = (db: Db, args: { answer: string; ttlMs: number }) => {
+  const id = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const expiresAt = Date.now() + args.ttlMs;
+  db.prepare("DELETE FROM captchas WHERE expires_at < ?").run(Date.now());
+  db.prepare("INSERT INTO captchas (id, answer, expires_at) VALUES (?, ?, ?)").run(id, args.answer, expiresAt);
+  return { id, expiresAt };
+};
+
+export const verifyCaptcha = (db: Db, args: { id: string; answer: string }) => {
+  const row = db.prepare("SELECT answer, expires_at as expiresAt FROM captchas WHERE id = ?").get(args.id) as
+    | { answer: string; expiresAt: number }
+    | undefined;
+  if (!row) return { ok: false as const, reason: "not_found" as const };
+  if (row.expiresAt < Date.now()) {
+    db.prepare("DELETE FROM captchas WHERE id = ?").run(args.id);
+    return { ok: false as const, reason: "expired" as const };
+  }
+  const ok = row.answer.trim().toLowerCase() === args.answer.trim().toLowerCase();
+  db.prepare("DELETE FROM captchas WHERE id = ?").run(args.id);
+  return ok ? { ok: true as const } : { ok: false as const, reason: "mismatch" as const };
+};
+
+export const listApprovedCommentsByPostSlug = (db: Db, slug: string) => {
+  const post = db.prepare("SELECT id FROM posts WHERE slug = ? LIMIT 1").get(slug) as { id: number } | undefined;
+  if (!post) return { items: [] as Comment[], total: 0 };
+  const rows = db
+    .prepare(
+      `
+      SELECT id, post_id as postId, author, content_md as contentMd, status, created_at as createdAt, updated_at as updatedAt
+      FROM comments
+      WHERE post_id = ? AND status = 'approved'
+      ORDER BY created_at ASC
+      `,
+    )
+    .all(post.id) as any[];
+  return { items: rows as Comment[], total: rows.length };
+};
+
+export const createComment = (
+  db: Db,
+  args: { postId: number; author: string; contentMd: string; ip?: string | null; userAgent?: string | null },
+) => {
+  const now = nowIso();
+  const res = db
+    .prepare(
+      "INSERT INTO comments (post_id, author, content_md, status, ip, user_agent, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)",
+    )
+    .run(args.postId, args.author, args.contentMd, args.ip ?? null, args.userAgent ?? null, now, now);
+  return Number(res.lastInsertRowid);
+};
+
+export const listCommentsAdmin = (db: Db, args: { status?: "pending" | "approved"; postId?: number }) => {
+  const clauses: string[] = [];
+  const params: any[] = [];
+  if (args.status) {
+    clauses.push("c.status = ?");
+    params.push(args.status);
+  }
+  if (args.postId) {
+    clauses.push("c.post_id = ?");
+    params.push(args.postId);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        c.id,
+        c.post_id as postId,
+        c.author,
+        c.content_md as contentMd,
+        c.status,
+        c.created_at as createdAt,
+        c.updated_at as updatedAt,
+        p.title as postTitle,
+        p.slug as postSlug
+      FROM comments c
+      JOIN posts p ON p.id = c.post_id
+      ${where}
+      ORDER BY c.created_at DESC
+      LIMIT 500
+      `,
+    )
+    .all(...params) as any[];
+  return rows;
+};
+
+export const updateCommentAdmin = (
+  db: Db,
+  args: { id: number; status?: "pending" | "approved"; contentMd?: string },
+) => {
+  const row = db.prepare("SELECT id FROM comments WHERE id = ?").get(args.id) as { id: number } | undefined;
+  if (!row) return false;
+  const fields: string[] = [];
+  const params: any[] = [];
+  if (args.status) {
+    fields.push("status = ?");
+    params.push(args.status);
+  }
+  if (args.contentMd !== undefined) {
+    fields.push("content_md = ?");
+    params.push(args.contentMd);
+  }
+  fields.push("updated_at = ?");
+  params.push(nowIso());
+  params.push(args.id);
+  db.prepare(`UPDATE comments SET ${fields.join(", ")} WHERE id = ?`).run(...params);
+  return true;
+};
+
+export const deleteCommentAdmin = (db: Db, id: number) => {
+  db.prepare("DELETE FROM comments WHERE id = ?").run(id);
+};
+
+export const listLinksPublic = (db: Db) => {
+  const rows = db
+    .prepare(
+      "SELECT id, title, url, description, icon_url as iconUrl, sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt FROM links ORDER BY sort_order DESC, created_at DESC",
+    )
+    .all() as any[];
+  return rows as Link[];
+};
+
+export const listLinksAdmin = (db: Db) => listLinksPublic(db);
+
+export const createLinkAdmin = (
+  db: Db,
+  args: { title: string; url: string; description: string; iconUrl: string; sortOrder: number },
+) => {
+  const now = nowIso();
+  const res = db
+    .prepare(
+      "INSERT INTO links (title, url, description, icon_url, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(args.title, args.url, args.description, args.iconUrl, args.sortOrder, now, now);
+  return Number(res.lastInsertRowid);
+};
+
+export const updateLinkAdmin = (
+  db: Db,
+  args: { id: number; title: string; url: string; description: string; iconUrl: string; sortOrder: number },
+) => {
+  db.prepare(
+    "UPDATE links SET title = ?, url = ?, description = ?, icon_url = ?, sort_order = ?, updated_at = ? WHERE id = ?",
+  ).run(args.title, args.url, args.description, args.iconUrl, args.sortOrder, nowIso(), args.id);
+};
+
+export const deleteLinkAdmin = (db: Db, id: number) => {
+  db.prepare("DELETE FROM links WHERE id = ?").run(id);
+};
+
+export const createLinkRequest = (
+  db: Db,
+  args: { name: string; url: string; description: string; message: string; ip?: string | null; userAgent?: string | null },
+) => {
+  const now = nowIso();
+  const res = db
+    .prepare(
+      "INSERT INTO link_requests (name, url, description, message, status, ip, user_agent, created_at) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)",
+    )
+    .run(args.name, args.url, args.description, args.message, args.ip ?? null, args.userAgent ?? null, now);
+  return Number(res.lastInsertRowid);
+};
+
+export const listLinkRequestsPublic = (db: Db) => {
+  const rows = db
+    .prepare(
+      "SELECT id, name, url, description, message, status, created_at as createdAt FROM link_requests WHERE status = 'approved' ORDER BY created_at DESC LIMIT 200",
+    )
+    .all() as any[];
+  return rows as LinkRequest[];
+};
+
+export const listLinkRequestsAdmin = (db: Db, status?: "pending" | "approved") => {
+  const where = status ? "WHERE status = ?" : "";
+  const rows = db
+    .prepare(
+      `SELECT id, name, url, description, message, status, created_at as createdAt FROM link_requests ${where} ORDER BY created_at DESC LIMIT 500`,
+    )
+    .all(...(status ? [status] : [])) as any[];
+  return rows as LinkRequest[];
+};
+
+export const updateLinkRequestAdmin = (db: Db, args: { id: number; status: "pending" | "approved" }) => {
+  db.prepare("UPDATE link_requests SET status = ? WHERE id = ?").run(args.status, args.id);
+};
+
+export const deleteLinkRequestAdmin = (db: Db, id: number) => {
+  db.prepare("DELETE FROM link_requests WHERE id = ?").run(id);
 };
 
 const hasColumn = (db: Db, table: string, column: string) => {
@@ -564,6 +831,7 @@ export const defaultSiteSettings = (): SiteSettings => ({
       { label: "首页", path: "/", icon: "home" },
       { label: "归档", path: "/archive", icon: "archive" },
       { label: "标签", path: "/tags", icon: "tag" },
+      { label: "友链", path: "/links", icon: "link" },
       { label: "关于", path: "/about", icon: "info" },
     ],
   },

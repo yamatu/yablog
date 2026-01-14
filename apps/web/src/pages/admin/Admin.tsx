@@ -1,8 +1,9 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { api, Post, User } from "../../api";
+import { api, CommentAdminRow, Link as FriendLink, LinkRequest, Post, User } from "../../api";
 import { ImageField } from "../../components/ImageField";
+import { Markdown } from "../../components/Markdown";
 import { MediaLibraryPanel } from "../../components/MediaLibraryModal";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useSite } from "../../site";
@@ -22,6 +23,7 @@ const NAV_PATH_OPTIONS = [
   { path: "/archive", label: "归档 /archive" },
   { path: "/tags", label: "标签 /tags" },
   { path: "/categories", label: "分类 /categories" },
+  { path: "/links", label: "友链 /links" },
   { path: "/about", label: "关于 /about" },
 ];
 
@@ -156,6 +158,8 @@ function AdminDashboard({ user }: { user: User }) {
         <div style={{ display: "flex", gap: 12 }}>
           <button className="btn-primary" onClick={() => navigate("/admin/new")}>+ 新建文章</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/media")}>图库</button>
+          <button className="btn-ghost" onClick={() => navigate("/admin/comments")}>评论</button>
+          <button className="btn-ghost" onClick={() => navigate("/admin/links")}>友链</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/settings")}>设置</button>
           <button className="btn-ghost" onClick={onLogout}>退出</button>
         </div>
@@ -1134,5 +1138,574 @@ export function AdminSettingsPage() {
         </div>
       </div>
     </AdminLayoutWrapper>
+  );
+}
+
+function shortDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+export function AdminCommentsPage() {
+  const { user, loading } = useMe();
+  const location = useLocation();
+  if (loading) return <div className="container" style={{ padding: "26px 0" }}>加载中…</div>;
+  if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  return (
+    <AdminLayoutWrapper>
+      <AdminCommentsPanel />
+    </AdminLayoutWrapper>
+  );
+}
+
+function AdminCommentsPanel() {
+  const navigate = useNavigate();
+  const [status, setStatus] = useState<"" | "pending" | "approved">("pending");
+  const [items, setItems] = useState<CommentAdminRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingMd, setEditingMd] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await api.adminListComments({ status: status || undefined });
+      setItems(res.items);
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return (
+    <div className="glass content">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>评论管理</h2>
+          <div className="muted">审核 / 编辑 / 删除</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button className="btn-ghost" onClick={() => navigate("/admin")}>返回控制台</button>
+          <button className="btn-ghost" onClick={refresh} disabled={loading}>刷新</button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+        <div className="muted">状态</div>
+        <select value={status} onChange={(e) => setStatus(e.target.value as any)} style={{ width: 160 }}>
+          <option value="pending">待审核</option>
+          <option value="approved">已通过</option>
+          <option value="">全部</option>
+        </select>
+        <div className="muted">最多显示 500 条</div>
+      </div>
+
+      {err ? <div className="muted" style={{ color: "red", marginBottom: 14 }}>错误：{err}</div> : null}
+      {loading ? <div className="muted">加载中…</div> : null}
+      {!loading && items.length === 0 ? <div className="muted">暂无评论</div> : null}
+
+      <div style={{ display: "grid", gap: 12 }}>
+        {items.map((c) => {
+          const isEditing = editingId === c.id;
+          const isBusy = busyId === c.id;
+          return (
+            <div key={c.id} className="card" style={{ padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {c.postTitle}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    <a href={`/post/${c.postSlug}`} target="_blank" rel="noreferrer">/post/{c.postSlug}</a>
+                    {" · "}
+                    {c.author}
+                    {" · "}
+                    {shortDate(c.createdAt)}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <span className="pill" style={{ color: c.status === "approved" ? "green" : "orange" }}>
+                    {c.status === "approved" ? "已通过" : "待审核"}
+                  </span>
+                  <button
+                    className="btn-ghost"
+                    disabled={isBusy}
+                    onClick={async () => {
+                      setBusyId(c.id);
+                      try {
+                        await api.adminUpdateComment(c.id, { status: c.status === "approved" ? "pending" : "approved" });
+                        await refresh();
+                      } finally {
+                        setBusyId(null);
+                      }
+                    }}
+                  >
+                    {c.status === "approved" ? "取消通过" : "通过"}
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => {
+                      if (isEditing) {
+                        setEditingId(null);
+                        setEditingMd("");
+                        return;
+                      }
+                      setEditingId(c.id);
+                      setEditingMd(c.contentMd);
+                    }}
+                  >
+                    {isEditing ? "关闭编辑" : "编辑"}
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    disabled={isBusy}
+                    onClick={async () => {
+                      if (!confirm("确定删除这条评论吗？")) return;
+                      setBusyId(c.id);
+                      try {
+                        await api.adminDeleteComment(c.id);
+                        await refresh();
+                      } finally {
+                        setBusyId(null);
+                      }
+                    }}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ height: 10 }} />
+
+              {isEditing ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <MarkdownEditor value={editingMd} onChange={setEditingMd} minHeight={160} />
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div className="muted">预览</div>
+                    <button
+                      className="btn-primary"
+                      disabled={isBusy}
+                      onClick={async () => {
+                        const next = editingMd.trim();
+                        if (!next) return;
+                        setBusyId(c.id);
+                        try {
+                          await api.adminUpdateComment(c.id, { contentMd: next });
+                          setEditingId(null);
+                          setEditingMd("");
+                          await refresh();
+                        } finally {
+                          setBusyId(null);
+                        }
+                      }}
+                    >
+                      保存
+                    </button>
+                  </div>
+                  <div className="card markdown" style={{ padding: 14 }}>
+                    <Markdown value={editingMd} />
+                  </div>
+                </div>
+              ) : (
+                <div className="card markdown" style={{ padding: 14 }}>
+                  <Markdown value={c.contentMd} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function AdminLinksPage() {
+  const { user, loading } = useMe();
+  const location = useLocation();
+  if (loading) return <div className="container" style={{ padding: "26px 0" }}>加载中…</div>;
+  if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  return (
+    <AdminLayoutWrapper>
+      <AdminLinksPanel />
+    </AdminLayoutWrapper>
+  );
+}
+
+function AdminLinksPanel() {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<"links" | "requests">("links");
+
+  const [links, setLinks] = useState<FriendLink[]>([]);
+  const [linksErr, setLinksErr] = useState<string | null>(null);
+  const [linksLoading, setLinksLoading] = useState(true);
+
+  const [reqStatus, setReqStatus] = useState<"pending" | "approved">("pending");
+  const [requests, setRequests] = useState<LinkRequest[]>([]);
+  const [reqErr, setReqErr] = useState<string | null>(null);
+  const [reqLoading, setReqLoading] = useState(true);
+
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const [newLink, setNewLink] = useState<{ title: string; url: string; description: string; iconUrl: string; sortOrder: number }>({
+    title: "",
+    url: "",
+    description: "",
+    iconUrl: "",
+    sortOrder: 0,
+  });
+
+  const refreshLinks = useCallback(async () => {
+    setLinksLoading(true);
+    setLinksErr(null);
+    try {
+      const res = await api.adminListLinks();
+      setLinks(res.items);
+    } catch (e: any) {
+      setLinksErr(e?.message ?? String(e));
+    } finally {
+      setLinksLoading(false);
+    }
+  }, []);
+
+  const refreshRequests = useCallback(async () => {
+    setReqLoading(true);
+    setReqErr(null);
+    try {
+      const res = await api.adminListLinkRequests({ status: reqStatus });
+      setRequests(res.items);
+    } catch (e: any) {
+      setReqErr(e?.message ?? String(e));
+    } finally {
+      setReqLoading(false);
+    }
+  }, [reqStatus]);
+
+  useEffect(() => {
+    refreshLinks();
+  }, [refreshLinks]);
+
+  useEffect(() => {
+    refreshRequests();
+  }, [refreshRequests]);
+
+  const detectIcon = async (url: string) => {
+    const u = url.trim();
+    if (!u) return "";
+    const res = await api.adminDetectLinkIcon(u);
+    return res.iconUrl || "";
+  };
+
+  return (
+    <div className="glass content">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>友情链接</h2>
+          <div className="muted">链接列表 + 友链申请审核</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button className="btn-ghost" onClick={() => navigate("/admin")}>返回控制台</button>
+          <button
+            className={tab === "links" ? "btn-primary" : "btn-ghost"}
+            onClick={() => setTab("links")}
+          >
+            链接
+          </button>
+          <button
+            className={tab === "requests" ? "btn-primary" : "btn-ghost"}
+            onClick={() => setTab("requests")}
+          >
+            申请
+          </button>
+        </div>
+      </div>
+
+      {tab === "links" ? (
+        <>
+          {linksErr ? <div className="muted" style={{ color: "red", marginBottom: 14 }}>错误：{linksErr}</div> : null}
+
+          <div className="card" style={{ padding: 16, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <div style={{ fontWeight: 900 }}>新增友情链接</div>
+              <button className="btn-ghost" onClick={refreshLinks} disabled={linksLoading}>刷新</button>
+            </div>
+            <div style={{ height: 12 }} />
+            <div style={{ display: "grid", gap: 10 }}>
+              <input value={newLink.title} onChange={(e) => setNewLink({ ...newLink, title: e.target.value })} placeholder="标题" />
+              <input value={newLink.url} onChange={(e) => setNewLink({ ...newLink, url: e.target.value })} placeholder="URL（https://...）" />
+              <input value={newLink.description} onChange={(e) => setNewLink({ ...newLink, description: e.target.value })} placeholder="描述（可选）" />
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <input value={newLink.iconUrl} onChange={(e) => setNewLink({ ...newLink, iconUrl: e.target.value })} placeholder="图标 URL（可选）" style={{ flex: 1, minWidth: 260 }} />
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={async () => {
+                    setBusyKey("new:icon");
+                    try {
+                      const iconUrl = await detectIcon(newLink.url);
+                      setNewLink((v) => ({ ...v, iconUrl: iconUrl || v.iconUrl }));
+                    } catch (e: any) {
+                      setLinksErr(e?.message ?? String(e));
+                    } finally {
+                      setBusyKey(null);
+                    }
+                  }}
+                  disabled={busyKey === "new:icon"}
+                >
+                  识别图标
+                </button>
+                <input
+                  value={String(newLink.sortOrder)}
+                  onChange={(e) => setNewLink({ ...newLink, sortOrder: Number(e.target.value || "0") })}
+                  placeholder="排序"
+                  style={{ width: 120 }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  className="btn-primary"
+                  disabled={busyKey === "new:create"}
+                  onClick={async () => {
+                    const title = newLink.title.trim();
+                    const url = newLink.url.trim();
+                    if (!title || !url) return;
+                    setBusyKey("new:create");
+                    try {
+                      await api.adminCreateLink({
+                        title,
+                        url,
+                        description: newLink.description.trim(),
+                        iconUrl: newLink.iconUrl.trim(),
+                        sortOrder: newLink.sortOrder || 0,
+                      });
+                      setNewLink({ title: "", url: "", description: "", iconUrl: "", sortOrder: 0 });
+                      await refreshLinks();
+                    } catch (e: any) {
+                      setLinksErr(e?.message ?? String(e));
+                    } finally {
+                      setBusyKey(null);
+                    }
+                  }}
+                >
+                  添加
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {linksLoading ? <div className="muted">加载中…</div> : null}
+          {!linksLoading && links.length === 0 ? <div className="muted">暂无友情链接</div> : null}
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {links.map((l) => (
+              <div key={l.id} className="card" style={{ padding: 16 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, overflow: "hidden", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {l.iconUrl ? <img src={l.iconUrl} alt="" style={{ width: 22, height: 22 }} /> : <span style={{ opacity: 0.7, fontWeight: 900 }}>{l.title.slice(0, 1)}</span>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 260 }}>
+                    <input value={l.title} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, title: e.target.value } : x))} placeholder="标题" />
+                  </div>
+                  <div style={{ width: 120 }}>
+                    <input
+                      value={String(l.sortOrder)}
+                      onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, sortOrder: Number(e.target.value || "0") } : x))}
+                      placeholder="排序"
+                    />
+                  </div>
+                </div>
+                <div style={{ height: 10 }} />
+                <input value={l.url} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, url: e.target.value } : x))} placeholder="URL" />
+                <div style={{ height: 10 }} />
+                <input value={l.description} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, description: e.target.value } : x))} placeholder="描述（可选）" />
+                <div style={{ height: 10 }} />
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <input value={l.iconUrl} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, iconUrl: e.target.value } : x))} placeholder="图标 URL（可选）" style={{ flex: 1, minWidth: 260 }} />
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    disabled={busyKey === `icon:${l.id}`}
+                    onClick={async () => {
+                      setBusyKey(`icon:${l.id}`);
+                      try {
+                        const iconUrl = await detectIcon(l.url);
+                        setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, iconUrl: iconUrl || x.iconUrl } : x));
+                      } catch (e: any) {
+                        setLinksErr(e?.message ?? String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    }}
+                  >
+                    识别图标
+                  </button>
+                </div>
+                <div style={{ height: 12 }} />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    className="btn-primary"
+                    disabled={busyKey === `save:${l.id}`}
+                    onClick={async () => {
+                      setBusyKey(`save:${l.id}`);
+                      try {
+                        await api.adminUpdateLink(l.id, {
+                          title: l.title.trim(),
+                          url: l.url.trim(),
+                          description: l.description?.trim() ?? "",
+                          iconUrl: l.iconUrl?.trim() ?? "",
+                          sortOrder: l.sortOrder || 0,
+                        });
+                        await refreshLinks();
+                      } catch (e: any) {
+                        setLinksErr(e?.message ?? String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    }}
+                  >
+                    保存
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    disabled={busyKey === `del:${l.id}`}
+                    onClick={async () => {
+                      if (!confirm("确定删除这个友情链接吗？")) return;
+                      setBusyKey(`del:${l.id}`);
+                      try {
+                        await api.adminDeleteLink(l.id);
+                        await refreshLinks();
+                      } catch (e: any) {
+                        setLinksErr(e?.message ?? String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    }}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+            <div className="muted">状态</div>
+            <select value={reqStatus} onChange={(e) => setReqStatus(e.target.value as any)} style={{ width: 160 }}>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+            </select>
+            <button className="btn-ghost" onClick={refreshRequests} disabled={reqLoading}>刷新</button>
+          </div>
+          {reqErr ? <div className="muted" style={{ color: "red", marginBottom: 14 }}>错误：{reqErr}</div> : null}
+          {reqLoading ? <div className="muted">加载中…</div> : null}
+          {!reqLoading && requests.length === 0 ? <div className="muted">暂无申请</div> : null}
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {requests.map((r) => (
+              <div key={r.id} className="card" style={{ padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <a href={r.url} target="_blank" rel="noreferrer">{r.name}</a>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {r.url} · {shortDate(r.createdAt)}
+                    </div>
+                    {r.description ? <div className="muted" style={{ marginTop: 6 }}>{r.description}</div> : null}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <span className="pill" style={{ color: r.status === "approved" ? "green" : "orange" }}>
+                      {r.status === "approved" ? "已通过" : "待审核"}
+                    </span>
+                    <button
+                      className="btn-ghost"
+                      disabled={busyKey === `req:toggle:${r.id}`}
+                      onClick={async () => {
+                        setBusyKey(`req:toggle:${r.id}`);
+                        try {
+                          await api.adminUpdateLinkRequest(r.id, { status: r.status === "approved" ? "pending" : "approved" });
+                          await refreshRequests();
+                        } catch (e: any) {
+                          setReqErr(e?.message ?? String(e));
+                        } finally {
+                          setBusyKey(null);
+                        }
+                      }}
+                    >
+                      {r.status === "approved" ? "取消通过" : "通过"}
+                    </button>
+                    {r.status !== "approved" ? (
+                      <button
+                        className="btn-primary"
+                        disabled={busyKey === `req:add:${r.id}`}
+                        onClick={async () => {
+                          setBusyKey(`req:add:${r.id}`);
+                          try {
+                            const iconUrl = await detectIcon(r.url).catch(() => "");
+                            await api.adminCreateLink({
+                              title: r.name,
+                              url: r.url,
+                              description: r.description ?? "",
+                              iconUrl: iconUrl || "",
+                              sortOrder: 0,
+                            });
+                            await api.adminUpdateLinkRequest(r.id, { status: "approved" });
+                            await Promise.all([refreshLinks(), refreshRequests()]);
+                            setTab("links");
+                          } catch (e: any) {
+                            setReqErr(e?.message ?? String(e));
+                          } finally {
+                            setBusyKey(null);
+                          }
+                        }}
+                      >
+                        通过并加入友情链接
+                      </button>
+                    ) : null}
+                    <button
+                      className="btn-ghost"
+                      disabled={busyKey === `req:del:${r.id}`}
+                      onClick={async () => {
+                        if (!confirm("确定删除这条申请吗？")) return;
+                        setBusyKey(`req:del:${r.id}`);
+                        try {
+                          await api.adminDeleteLinkRequest(r.id);
+                          await refreshRequests();
+                        } catch (e: any) {
+                          setReqErr(e?.message ?? String(e));
+                        } finally {
+                          setBusyKey(null);
+                        }
+                      }}
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+
+                {r.message ? (
+                  <>
+                    <div style={{ height: 10 }} />
+                    <div className="card markdown" style={{ padding: 14 }}>
+                      <Markdown value={r.message} />
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

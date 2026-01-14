@@ -17,6 +17,41 @@ export type Post = {
 
 export type User = { userId: number; username: string };
 
+export type Captcha = { id: string; question: string };
+
+export type Comment = {
+  id: number;
+  postId: number;
+  author: string;
+  contentMd: string;
+  status: "pending" | "approved";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommentAdminRow = Comment & { postTitle: string; postSlug: string };
+
+export type Link = {
+  id: number;
+  title: string;
+  url: string;
+  description: string;
+  iconUrl: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LinkRequest = {
+  id: number;
+  name: string;
+  url: string;
+  description: string;
+  message: string;
+  status: "pending" | "approved";
+  createdAt: string;
+};
+
 export type SiteSettings = {
   nav: {
     brandText: string;
@@ -83,6 +118,9 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
       const data = await res.json().catch(() => null) as any;
       const err = typeof data?.error === "string" ? data.error : null;
       if (err === "invalid_credentials") throw new Error("用户名或密码错误");
+      if (err === "invalid_captcha") throw new Error("验证码错误或已过期");
+      if (err === "blocked_host") throw new Error("该站点地址不允许访问（安全限制）");
+      if (err === "invalid_url") throw new Error("URL 不合法");
       if (err) throw new Error(err);
       throw new Error(`HTTP ${res.status}`);
     }
@@ -94,6 +132,8 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
 
 export const api = {
   health: () => json<{ ok: true }>("/api/health"),
+
+  captcha: () => json<Captcha>("/api/captcha"),
 
   search: (args: { q: string; page?: number; limit?: number }) => {
     const url = new URL("/api/search", window.location.origin);
@@ -129,8 +169,38 @@ export const api = {
 
   getPost: (slug: string) => json<{ post: Post }>(`/api/posts/${encodeURIComponent(slug)}`),
 
+  listPostComments: (slug: string) =>
+    json<{ items: Comment[]; total: number }>(`/api/posts/${encodeURIComponent(slug)}/comments`),
+
+  createPostComment: (
+    slug: string,
+    payload: { author: string; contentMd: string; captchaId: string; captchaAnswer: string },
+  ) =>
+    json<{ ok: true; id: number; status: "pending" }>(`/api/posts/${encodeURIComponent(slug)}/comments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
   listTags: () => json<{ items: string[] }>("/api/tags"),
   listCategories: () => json<{ items: { name: string; slug: string }[] }>("/api/categories"),
+
+  listLinks: () => json<{ items: Link[] }>("/api/links"),
+  listLinkRequests: () => json<{ items: LinkRequest[] }>("/api/links/requests"),
+
+  createLinkRequest: (payload: {
+    name: string;
+    url: string;
+    description?: string;
+    message?: string;
+    captchaId: string;
+    captchaAnswer: string;
+  }) =>
+    json<{ ok: true; id: number; status: "pending" }>("/api/links/requests", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 
   login: (args: { username: string; password: string }) =>
     json<{ ok: true; user: { id: number; username: string; createdAt: string } }>(
@@ -242,4 +312,63 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     }),
+
+  adminListComments: (args: { status?: "pending" | "approved"; postId?: number }) => {
+    const url = new URL("/api/admin/comments", window.location.origin);
+    if (args.status) url.searchParams.set("status", args.status);
+    if (args.postId !== undefined) url.searchParams.set("postId", String(args.postId));
+    return json<{ items: CommentAdminRow[] }>(url);
+  },
+
+  adminUpdateComment: (id: number, payload: { status?: "pending" | "approved"; contentMd?: string }) =>
+    json<{ ok: true }>(`/api/admin/comments/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminDeleteComment: (id: number) => json<{ ok: true }>(`/api/admin/comments/${id}`, { method: "DELETE" }),
+
+  adminListLinks: () => json<{ items: Link[] }>("/api/admin/links"),
+
+  adminCreateLink: (payload: { title: string; url: string; description?: string; iconUrl?: string; sortOrder?: number }) =>
+    json<{ ok: true; id: number }>("/api/admin/links", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminUpdateLink: (
+    id: number,
+    payload: { title: string; url: string; description?: string; iconUrl?: string; sortOrder?: number },
+  ) =>
+    json<{ ok: true }>(`/api/admin/links/${id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminDeleteLink: (id: number) => json<{ ok: true }>(`/api/admin/links/${id}`, { method: "DELETE" }),
+
+  adminListLinkRequests: (args: { status?: "pending" | "approved" }) => {
+    const url = new URL("/api/admin/link-requests", window.location.origin);
+    if (args.status) url.searchParams.set("status", args.status);
+    return json<{ items: LinkRequest[] }>(url);
+  },
+
+  adminUpdateLinkRequest: (id: number, payload: { status: "pending" | "approved" }) =>
+    json<{ ok: true }>(`/api/admin/link-requests/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminDeleteLinkRequest: (id: number) =>
+    json<{ ok: true }>(`/api/admin/link-requests/${id}`, { method: "DELETE" }),
+
+  adminDetectLinkIcon: (url: string) => {
+    const u = new URL("/api/admin/link-icon", window.location.origin);
+    u.searchParams.set("url", url);
+    return json<{ iconUrl: string }>(u);
+  },
 };

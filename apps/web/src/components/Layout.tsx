@@ -97,6 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { label: "首页", path: "/", icon: "home" },
           { label: "归档", path: "/archive", icon: "archive" },
           { label: "标签", path: "/tags", icon: "tag" },
+          { label: "友链", path: "/links", icon: "link" },
           { label: "关于", path: "/about", icon: "info" },
         ];
   const footerText =

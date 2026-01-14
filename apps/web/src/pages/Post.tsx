@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { MdDateRange, MdLabel, MdFolder } from "react-icons/md";
+import { MdDateRange, MdLabel, MdFolder, MdRefresh } from "react-icons/md";
 
-import { api, Post } from "../api";
+import { api, Captcha, Comment, Post } from "../api";
 import { Markdown } from "../components/Markdown";
 import { buildToc } from "../markdown";
 import { useSite } from "../site";
@@ -18,6 +18,18 @@ export function PostPage() {
   const { site } = useSite();
   const [post, setPost] = useState<Post | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsErr, setCommentsErr] = useState<string | null>(null);
+
+  const [captcha, setCaptcha] = useState<Captcha | null>(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [author, setAuthor] = useState(() => localStorage.getItem("yablog_comment_author") ?? "");
+  const [contentMd, setContentMd] = useState("");
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [submitOk, setSubmitOk] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -36,6 +48,36 @@ export function PostPage() {
       alive = false;
     };
   }, [slug]);
+
+  const refreshCaptcha = useCallback(async () => {
+    try {
+      const c = await api.captcha();
+      setCaptcha(c);
+      setCaptchaAnswer("");
+    } catch {
+      setCaptcha(null);
+    }
+  }, []);
+
+  const loadComments = useCallback(async () => {
+    if (!slug) return;
+    setCommentsLoading(true);
+    setCommentsErr(null);
+    try {
+      const res = await api.listPostComments(slug);
+      setComments(res.items);
+    } catch (e: any) {
+      setCommentsErr(e?.message ?? String(e));
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    refreshCaptcha();
+    loadComments();
+  }, [slug, refreshCaptcha, loadComments]);
 
   const toc = useMemo(() => post ? buildToc(post.contentMd) : [], [post]);
   let headingCursor = 0;
@@ -130,6 +172,118 @@ export function PostPage() {
                 },
               }}
             />
+          </div>
+
+          <div style={{ height: 18 }} />
+
+          <div className="card content">
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <h3 style={{ margin: 0 }}>评论</h3>
+              <button className="btn-ghost" type="button" onClick={loadComments} title="刷新评论" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <MdRefresh />
+                刷新
+              </button>
+            </div>
+
+            <div style={{ height: 12 }} />
+
+            {commentsErr ? <div className="muted" style={{ color: "red" }}>加载评论失败：{commentsErr}</div> : null}
+            {commentsLoading ? <div className="muted">加载中…</div> : null}
+
+            {!commentsLoading && !commentsErr && comments.length === 0 ? (
+              <div className="muted">还没有评论，来做第一个留言的人吧。</div>
+            ) : null}
+
+            <div style={{ display: "grid", gap: 12 }}>
+              {comments.map((c) => (
+                <div key={c.id} className="glass" style={{ padding: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700 }}>{c.author}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>{formatDate(c.createdAt)}</div>
+                  </div>
+                  <div style={{ height: 8 }} />
+                  <div className="markdown" style={{ padding: 0, background: "transparent", border: 0 }}>
+                    <Markdown value={c.contentMd} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ height: 18 }} />
+            <div style={{ height: 1, background: "var(--border)", opacity: 0.8 }} />
+            <div style={{ height: 18 }} />
+
+            <h3 style={{ margin: 0 }}>发表评论</h3>
+            <div style={{ height: 12 }} />
+
+            <form
+              onSubmit={async (e: FormEvent) => {
+                e.preventDefault();
+                setSubmitErr(null);
+                setSubmitOk(null);
+                if (!slug) return;
+                if (!captcha) {
+                  setSubmitErr("验证码加载失败，请刷新页面重试");
+                  return;
+                }
+                const a = author.trim();
+                const m = contentMd.trim();
+                if (!a) return setSubmitErr("请输入昵称");
+                if (!m) return setSubmitErr("请输入评论内容");
+                setSubmitting(true);
+                try {
+                  localStorage.setItem("yablog_comment_author", a);
+                  await api.createPostComment(slug, {
+                    author: a,
+                    contentMd: m,
+                    captchaId: captcha.id,
+                    captchaAnswer,
+                  });
+                  setContentMd("");
+                  setSubmitOk("已提交，等待后台审核后展示。");
+                  await refreshCaptcha();
+                } catch (e: any) {
+                  setSubmitErr(e?.message ?? String(e));
+                  await refreshCaptcha();
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              style={{ display: "grid", gap: 10 }}
+            >
+              <input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="昵称" maxLength={40} />
+              <textarea
+                value={contentMd}
+                onChange={(e) => setContentMd(e.target.value)}
+                placeholder="评论内容（支持 Markdown）"
+                rows={5}
+                maxLength={2000}
+                style={{ resize: "vertical" }}
+              />
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <div className="muted" style={{ minWidth: 120 }}>
+                  验证码：{captcha?.question ?? "—"}
+                </div>
+                <input
+                  value={captchaAnswer}
+                  onChange={(e) => setCaptchaAnswer(e.target.value)}
+                  placeholder="答案"
+                  style={{ width: 120 }}
+                />
+                <button type="button" className="btn-ghost" onClick={refreshCaptcha} title="换一题" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <MdRefresh />
+                  换一题
+                </button>
+                <div style={{ flex: 1 }} />
+                <button className="btn-primary" disabled={submitting}>
+                  {submitting ? "提交中…" : "提交评论"}
+                </button>
+              </div>
+
+              {submitErr ? <div className="muted" style={{ color: "red" }}>{submitErr}</div> : null}
+              {submitOk ? <div className="muted" style={{ color: "var(--accent)" }}>{submitOk}</div> : null}
+            </form>
           </div>
         </div>
 

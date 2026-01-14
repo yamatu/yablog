@@ -13,7 +13,16 @@ import {
 } from "./pages/ListPage";
 import { HomePage } from "./pages/Home";
 import { PostPage } from "./pages/Post";
-import { AdminEditorPage, AdminIndexPage, AdminLoginPage, AdminMediaPage, AdminSettingsPage } from "./pages/admin/Admin";
+import { LinksPage } from "./pages/Links";
+import {
+  AdminCommentsPage,
+  AdminEditorPage,
+  AdminIndexPage,
+  AdminLinksPage,
+  AdminLoginPage,
+  AdminMediaPage,
+  AdminSettingsPage,
+} from "./pages/admin/Admin";
 
 export function App() {
   return (
@@ -30,12 +39,15 @@ export function App() {
             <Route path="/categories" element={<CategoryListPage />} />
             <Route path="/category/:category" element={<CategoryPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/links" element={<LinksPage />} />
 
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route path="/admin" element={<AdminIndexPage />} />
             <Route path="/admin/new" element={<AdminEditorPage mode="new" />} />
             <Route path="/admin/edit/:id" element={<AdminEditorPage mode="edit" />} />
             <Route path="/admin/media" element={<AdminMediaPage />} />
+            <Route path="/admin/comments" element={<AdminCommentsPage />} />
+            <Route path="/admin/links" element={<AdminLinksPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
 
             <Route path="*" element={<HomePage />} />
