@@ -1152,6 +1152,8 @@ button:hover,
   background: var(--code-bg);
   overflow: hidden;
   margin: 18px 0;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .markdown .codeBlockBar {
@@ -1162,6 +1164,7 @@ button:hover,
   padding: 10px 12px;
   border-bottom: 1px solid var(--code-border);
   background: color-mix(in oklab, var(--code-bg) 92%, transparent);
+  min-width: 0;
 }
 
 .markdown .codeBlockLang {
@@ -1169,6 +1172,10 @@ button:hover,
   font-size: 12px;
   letter-spacing: 0.2px;
   color: color-mix(in oklab, var(--code-text) 70%, transparent);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .markdown .codeCopyBtn {
@@ -1197,16 +1204,49 @@ button:hover,
   -webkit-overflow-scrolling: touch;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 
 .markdown .codeBlock code {
-  display: block;
+  display: inline-block;
+  min-width: 100%;
   max-width: 100%;
   white-space: pre;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.7;
   color: var(--code-text);
+}
+
+@media (max-width: 720px) {
+  .markdown .codeBlock[data-overflow="1"] .codeBlockLang::after {
+    content: " · 左右滑动";
+    font-weight: 500;
+    color: color-mix(in oklab, var(--code-text) 55%, transparent);
+  }
+}
+
+@media (max-width: 520px) {
+  .markdown {
+    padding: 16px;
+  }
+
+  .markdown .codeBlockBar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .markdown .codeCopyBtn {
+    margin-left: auto;
+  }
+
+  .markdown .codeBlock pre {
+    padding: 12px 12px 14px;
+  }
+
+  .markdown .codeBlock code {
+    font-size: 12px;
+  }
 }
 
 .scrollTopBtn {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -55,6 +55,8 @@ export function Markdown({
 
     const lang = (className ?? "").match(/language-([\w-]+)/i)?.[1] ?? "";
     const [copied, setCopied] = useState(false);
+    const preRef = useRef<HTMLPreElement | null>(null);
+    const [overflow, setOverflow] = useState(false);
 
     const onCopy = async () => {
       try {
@@ -66,8 +68,27 @@ export function Markdown({
       }
     };
 
+    useEffect(() => {
+      const el = preRef.current;
+      if (!el) return;
+
+      const check = () => setOverflow(el.scrollWidth > el.clientWidth + 1);
+      check();
+
+      let ro: ResizeObserver | null = null;
+      if (typeof ResizeObserver !== "undefined") {
+        ro = new ResizeObserver(check);
+        ro.observe(el);
+      }
+      window.addEventListener("resize", check, { passive: true });
+      return () => {
+        ro?.disconnect();
+        window.removeEventListener("resize", check);
+      };
+    }, [text]);
+
     return (
-      <div className="codeBlock">
+      <div className="codeBlock" data-overflow={overflow ? "1" : "0"}>
         <div className="codeBlockBar">
           <div className="codeBlockLang">{lang || "code"}</div>
           <button className="codeCopyBtn" type="button" onClick={onCopy} title="复制代码">
@@ -75,7 +96,7 @@ export function Markdown({
             {copied ? "已复制" : "复制"}
           </button>
         </div>
-        <pre>
+        <pre ref={preRef}>
           <code className={className}>{text}</code>
         </pre>
       </div>
