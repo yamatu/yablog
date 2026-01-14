@@ -167,7 +167,31 @@ if (!hasAnyUsers(db)) {
 
 const app = express();
 app.set("trust proxy", true);
-app.use(helmet());
+app.use(
+  helmet({
+    // We allow users to configure remote images (Unsplash/DiceBear/any https URL), so the strict defaults
+    // would break common usage in production.
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"],
+        "base-uri": ["'self'"],
+        "form-action": ["'self'"],
+        "object-src": ["'none'"],
+        // Vite production bundles are same-origin.
+        "script-src": ["'self'"],
+        // We use inline styles heavily (e.g. backgroundImage).
+        "style-src": ["'self'", "'unsafe-inline'"],
+        // Allow remote images (https) + local uploads + data/blob for markdown/avatars.
+        "img-src": ["'self'", "data:", "blob:", "https:"],
+        "font-src": ["'self'", "data:"],
+        "connect-src": ["'self'"],
+        "frame-ancestors": ["'self'"],
+      },
+    },
+  }),
+);
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 
