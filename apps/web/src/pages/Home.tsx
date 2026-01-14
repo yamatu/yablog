@@ -16,7 +16,7 @@ export function HomePage() {
   const [total, setTotal] = useState(0);
   const limit = 10;
   const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;

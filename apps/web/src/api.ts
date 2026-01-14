@@ -121,6 +121,7 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
       if (err === "invalid_captcha") throw new Error("验证码错误或已过期");
       if (err === "blocked_host") throw new Error("该站点地址不允许访问（安全限制）");
       if (err === "invalid_url") throw new Error("URL 不合法");
+      if (err === "rate_limited") throw new Error("请求过于频繁，请稍后再试");
       if (err) throw new Error(err);
       throw new Error(`HTTP ${res.status}`);
     }

@@ -12,6 +12,12 @@ export type Cache = {
   setJSON: (key: string, value: unknown, ttlSec: number) => Promise<void>;
   key: (ns: string, raw: unknown) => Promise<string>;
   wrapJSON: <T>(ns: string, raw: unknown, ttlSec: number, compute: () => Promise<T> | T) => Promise<T>;
+  rateLimit: (args: { bucket: string; key: string; limit: number; windowSec: number }) => Promise<{
+    allowed: boolean;
+    count: number;
+    remaining: number;
+    resetSec: number;
+  }>;
 };
 
 const prefix = "yablog:cache:";
@@ -44,6 +50,7 @@ export const createCache = async (): Promise<Cache> => {
     setJSON: async () => {},
     key: async (_ns, raw) => `${prefix}noop:${sha1(safeJsonStringify(raw) ?? String(raw))}`,
     wrapJSON: async (_ns, _raw, _ttl, compute) => Promise.resolve(compute()),
+    rateLimit: async (args) => ({ allowed: true, count: 0, remaining: args.limit, resetSec: args.windowSec }),
   };
   if (!url) return noop;
 
@@ -105,12 +112,29 @@ export const createCache = async (): Promise<Cache> => {
 
   const wrapJSON = async <T,>(ns: string, raw: unknown, ttlSec: number, compute: () => Promise<T> | T) => {
     const k = await key(ns, raw);
-    const hit = await getJSON<T>(k);
-    if (hit !== null) return hit;
+    const hit = await getJSON<any>(k);
+    if (hit !== null) {
+      if (hit && typeof hit === "object" && hit.__wrap === 1 && "value" in hit) return hit.value as T;
+      return hit as T;
+    }
     const value = await compute();
-    await setJSON(k, value, ttlSec);
+    await setJSON(k, { __wrap: 1, value }, ttlSec);
     return value;
   };
 
-  return { enabled: true, getVersion, bump, getJSON, setJSON, key, wrapJSON };
+  const rateLimit = async (args: { bucket: string; key: string; limit: number; windowSec: number }) => {
+    const k = `${prefix}rl:${args.bucket}:${args.key}`;
+    try {
+      const n = await client.incr(k);
+      if (n === 1) await client.expire(k, args.windowSec);
+      const ttl = await client.ttl(k);
+      const resetSec = ttl > 0 ? ttl : args.windowSec;
+      const remaining = Math.max(0, args.limit - n);
+      return { allowed: n <= args.limit, count: n, remaining, resetSec };
+    } catch {
+      return { allowed: true, count: 0, remaining: args.limit, resetSec: args.windowSec };
+    }
+  };
+
+  return { enabled: true, getVersion, bump, getJSON, setJSON, key, wrapJSON, rateLimit };
 };
