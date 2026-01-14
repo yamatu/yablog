@@ -13,6 +13,7 @@ import tar from "tar";
 import { z } from "zod";
 
 import { authenticateUser, hashPassword, loginSchema, signToken, verifyPassword } from "./auth.js";
+import { createCache } from "./cache.js";
 import { config } from "./config.js";
 import {
   defaultSiteSettings,
@@ -30,6 +31,8 @@ import {
 import { requireAuth, type AuthedRequest } from "./middleware.js";
 import { mountAdminRoutes } from "./routes/admin.js";
 import { mountPublicRoutes } from "./routes/public.js";
+
+const cache = await createCache();
 
 const db = openDb();
 initDb(db);
@@ -245,7 +248,7 @@ app.get("/api/auth/me", requireAuth, (req: AuthedRequest, res) => {
 });
 
 const publicRouter = express.Router();
-mountPublicRoutes(publicRouter, db);
+mountPublicRoutes(publicRouter, db, cache);
 app.use("/api", publicRouter);
 
 // Serve uploaded images from the DB directory volume (with optional hotlink protection)
@@ -800,7 +803,7 @@ adminRouter.put("/account", async (req: AuthedRequest, res) => {
   res.json({ ok: true, user: { userId, username: nextUsername } });
 });
 
-mountAdminRoutes(adminRouter, db);
+mountAdminRoutes(adminRouter, db, cache);
 app.use("/api/admin", adminRouter);
 
 if (config.webDistPath && fs.existsSync(config.webDistPath)) {

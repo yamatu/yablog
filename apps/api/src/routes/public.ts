@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import { z } from "zod";
 
+import type { Cache } from "../cache.js";
 import type { Db } from "../db.js";
 import {
   createCaptcha,
@@ -24,7 +25,7 @@ const parseBool = (value: unknown) => {
   return undefined;
 };
 
-export const mountPublicRoutes = (router: Router, db: Db) => {
+export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
   router.get("/captcha", (_req, res) => {
     const a = 1 + Math.floor(Math.random() * 9);
     const b = 1 + Math.floor(Math.random() * 9);
@@ -32,7 +33,7 @@ export const mountPublicRoutes = (router: Router, db: Db) => {
     res.json({ id, question: `${a} + ${b} = ?` });
   });
 
-  router.get("/search", (req, res) => {
+  router.get("/search", async (req, res) => {
     const query = z
       .object({
         q: z.string().optional(),
@@ -47,17 +48,25 @@ export const mountPublicRoutes = (router: Router, db: Db) => {
 
     if (!q) return res.json({ items: [], total: 0, page, limit, recommendations: [] });
 
-    const { items, total } = searchPosts(db, { q, page, limit, includeDrafts: false });
-    const recommendations = recommendPosts(db, { base: items, limit: 6 });
-    res.json({ items, total, page, limit, recommendations });
+    const data = await cache.wrapJSON(
+      "search",
+      { q, page, limit },
+      20,
+      () => {
+        const { items, total } = searchPosts(db, { q, page, limit, includeDrafts: false });
+        const recommendations = recommendPosts(db, { base: items, limit: 6 });
+        return { items, total, page, limit, recommendations };
+      },
+    );
+    res.json(data);
   });
 
-  router.get("/posts/:slug/comments", (req, res) => {
+  router.get("/posts/:slug/comments", async (req, res) => {
     const { slug } = z.object({ slug: z.string().min(1) }).parse(req.params);
     const post = getPostBySlug(db, slug);
     if (!post || post.status !== "published") return res.status(404).json({ error: "not_found" });
-    const { items, total } = listApprovedCommentsByPostSlug(db, slug);
-    res.json({ items, total });
+    const data = await cache.wrapJSON("comments", { slug }, 30, () => listApprovedCommentsByPostSlug(db, slug));
+    res.json(data);
   });
 
   router.post("/posts/:slug/comments", (req, res) => {
@@ -87,7 +96,7 @@ export const mountPublicRoutes = (router: Router, db: Db) => {
     res.json({ ok: true, id, status: "pending" });
   });
 
-  router.get("/posts", (req, res) => {
+  router.get("/posts", async (req, res) => {
     const query = z
       .object({
         page: z.string().optional(),
@@ -104,40 +113,51 @@ export const mountPublicRoutes = (router: Router, db: Db) => {
     const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit ?? "10", 10) || 10));
     const featured = parseBool(query.pinned ?? query.featured);
 
-    const { items, total } = listPosts(db, {
-      includeDrafts: false,
-      page,
-      limit,
-      q: query.q,
-      tag: query.tag,
-      category: query.category,
-      featured,
-    });
-
-    res.json({ items, total, page, limit });
+    const data = await cache.wrapJSON(
+      "posts",
+      { page, limit, q: query.q ?? "", tag: query.tag ?? "", category: query.category ?? "", featured: featured ?? null },
+      30,
+      () => {
+        const { items, total } = listPosts(db, {
+          includeDrafts: false,
+          page,
+          limit,
+          q: query.q,
+          tag: query.tag,
+          category: query.category,
+          featured,
+        });
+        return { items, total, page, limit };
+      },
+    );
+    res.json(data);
   });
 
-  router.get("/posts/:slug", (req, res) => {
+  router.get("/posts/:slug", async (req, res) => {
     const { slug } = z.object({ slug: z.string().min(1) }).parse(req.params);
-    const post = getPostBySlug(db, slug);
+    const post = await cache.wrapJSON("posts", { slug }, 60, () => getPostBySlug(db, slug));
     if (!post || post.status !== "published") return res.status(404).json({ error: "not_found" });
     res.json({ post });
   });
 
-  router.get("/tags", (_req, res) => {
-    res.json({ items: listTags(db) });
+  router.get("/tags", async (_req, res) => {
+    const data = await cache.wrapJSON("tags", { v: 1 }, 300, () => ({ items: listTags(db) }));
+    res.json(data);
   });
 
-  router.get("/categories", (_req, res) => {
-    res.json({ items: listCategories(db) });
+  router.get("/categories", async (_req, res) => {
+    const data = await cache.wrapJSON("categories", { v: 1 }, 300, () => ({ items: listCategories(db) }));
+    res.json(data);
   });
 
-  router.get("/links", (_req, res) => {
-    res.json({ items: listLinksPublic(db) });
+  router.get("/links", async (_req, res) => {
+    const data = await cache.wrapJSON("links", { v: 1 }, 120, () => ({ items: listLinksPublic(db) }));
+    res.json(data);
   });
 
-  router.get("/links/requests", (_req, res) => {
-    res.json({ items: listLinkRequestsPublic(db) });
+  router.get("/links/requests", async (_req, res) => {
+    const data = await cache.wrapJSON("linkRequests", { v: 1 }, 60, () => ({ items: listLinkRequestsPublic(db) }));
+    res.json(data);
   });
 
   router.post("/links/requests", (req, res) => {

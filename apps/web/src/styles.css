@@ -941,6 +941,29 @@ button:hover,
   line-height: 1;
 }
 
+.adminRoot input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.adminRoot .chkWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.adminRoot .adminBulkBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+}
+
 .adminRoot button {
   min-height: 40px;
 }

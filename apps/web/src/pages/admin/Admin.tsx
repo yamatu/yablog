@@ -124,6 +124,8 @@ function AdminDashboard({ user }: { user: User }) {
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const navigate = useNavigate();
 
   const refresh = useCallback(async () => {
@@ -143,9 +145,45 @@ function AdminDashboard({ user }: { user: User }) {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (!prev.size) return prev;
+      const visible = new Set(items.map((p) => p.id));
+      const next = new Set<number>();
+      for (const id of prev) if (visible.has(id)) next.add(id);
+      return next;
+    });
+  }, [items]);
+
   const onLogout = async () => {
     await api.logout().catch(() => { });
     navigate("/admin/login", { replace: true });
+  };
+
+  const visibleIds = items.map((p) => p.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const selectedCount = selectedIds.size;
+  const toggleOne = (id: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAllVisible = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
+  const clearSelected = () => setSelectedIds(new Set());
+
+  const runSequential = async (ids: number[], fn: (id: number) => Promise<void>) => {
+    for (const id of ids) await fn(id);
   };
 
   return (
@@ -167,8 +205,76 @@ function AdminDashboard({ user }: { user: User }) {
 
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索文章..." style={{ flex: 1 }} />
-        <button onClick={refresh} disabled={loading}>
+        <button className="btn-ghost" onClick={refresh} disabled={loading}>
           {loading ? "..." : "搜索"}
+        </button>
+      </div>
+
+      <div className="adminBulkBar" style={{ marginBottom: 18 }}>
+        <label className="chkWrap" title="全选当前列表">
+          <input type="checkbox" checked={allSelected} onChange={toggleAllVisible} />
+          <span className="muted">全选</span>
+        </label>
+        <div className="muted">{selectedCount ? `已选 ${selectedCount} 篇` : "未选择"}</div>
+        <div style={{ flex: 1 }} />
+        <button className="btn-ghost" disabled={!selectedCount || bulkBusy} onClick={clearSelected}>
+          清空
+        </button>
+        <button
+          className="btn-ghost"
+          disabled={!selectedCount || bulkBusy}
+          onClick={async () => {
+            setBulkBusy(true);
+            try {
+              const ids = Array.from(selectedIds);
+              await runSequential(ids, async (id) => {
+                await api.adminUpdatePostOrder(id, { featured: true });
+              });
+              await refresh();
+            } finally {
+              setBulkBusy(false);
+            }
+          }}
+        >
+          批量置顶
+        </button>
+        <button
+          className="btn-ghost"
+          disabled={!selectedCount || bulkBusy}
+          onClick={async () => {
+            setBulkBusy(true);
+            try {
+              const ids = Array.from(selectedIds);
+              await runSequential(ids, async (id) => {
+                await api.adminUpdatePostOrder(id, { featured: false });
+              });
+              await refresh();
+            } finally {
+              setBulkBusy(false);
+            }
+          }}
+        >
+          取消置顶
+        </button>
+        <button
+          className="btn-danger"
+          disabled={!selectedCount || bulkBusy}
+          onClick={async () => {
+            if (!confirm(`确定删除选中的 ${selectedCount} 篇文章吗？此操作不可恢复。`)) return;
+            setBulkBusy(true);
+            try {
+              const ids = Array.from(selectedIds);
+              await runSequential(ids, async (id) => {
+                await api.adminDeletePost(id);
+              });
+              clearSelected();
+              await refresh();
+            } finally {
+              setBulkBusy(false);
+            }
+          }}
+        >
+          批量删除
         </button>
       </div>
 
@@ -177,6 +283,9 @@ function AdminDashboard({ user }: { user: User }) {
       <div style={{ display: "flex", flexDirection: 'column', gap: 10 }}>
         {items.map((p) => (
           <div key={p.id} className="card adminPostRow" style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 0 }}>
+            <label className="chkWrap" style={{ marginRight: 10 }}>
+              <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} />
+            </label>
             <div className="adminPostMain" style={{ flex: 1, minWidth: 0 }}>
               <div className="adminPostTitle" style={{ fontWeight: 600, fontSize: 16, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
               <div className="meta adminPostMeta" style={{ display: 'flex', gap: 8, fontSize: 12, flexWrap: "wrap" }}>
@@ -1168,6 +1277,8 @@ function AdminCommentsPanel() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingMd, setEditingMd] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -1185,6 +1296,42 @@ function AdminCommentsPanel() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (!prev.size) return prev;
+      const visible = new Set(items.map((c) => c.id));
+      const next = new Set<number>();
+      for (const id of prev) if (visible.has(id)) next.add(id);
+      return next;
+    });
+  }, [items]);
+
+  const visibleIds = items.map((c) => c.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const selectedCount = selectedIds.size;
+  const toggleOne = (id: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAllVisible = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
+  const clearSelected = () => setSelectedIds(new Set());
+
+  const runSequential = async (ids: number[], fn: (id: number) => Promise<void>) => {
+    for (const id of ids) await fn(id);
+  };
 
   return (
     <div className="glass content">
@@ -1209,6 +1356,74 @@ function AdminCommentsPanel() {
         <div className="muted">最多显示 500 条</div>
       </div>
 
+      <div className="adminBulkBar" style={{ marginBottom: 18 }}>
+        <label className="chkWrap" title="全选当前列表">
+          <input type="checkbox" checked={allSelected} onChange={toggleAllVisible} />
+          <span className="muted">全选</span>
+        </label>
+        <div className="muted">{selectedCount ? `已选 ${selectedCount} 条` : "未选择"}</div>
+        <div style={{ flex: 1 }} />
+        <button className="btn-ghost" disabled={!selectedCount || bulkBusy} onClick={clearSelected}>
+          清空
+        </button>
+        <button
+          className="btn-ghost"
+          disabled={!selectedCount || bulkBusy}
+          onClick={async () => {
+            setBulkBusy(true);
+            try {
+              const ids = Array.from(selectedIds);
+              await runSequential(ids, async (id) => {
+                await api.adminUpdateComment(id, { status: "approved" });
+              });
+              await refresh();
+            } finally {
+              setBulkBusy(false);
+            }
+          }}
+        >
+          批量通过
+        </button>
+        <button
+          className="btn-ghost"
+          disabled={!selectedCount || bulkBusy}
+          onClick={async () => {
+            setBulkBusy(true);
+            try {
+              const ids = Array.from(selectedIds);
+              await runSequential(ids, async (id) => {
+                await api.adminUpdateComment(id, { status: "pending" });
+              });
+              await refresh();
+            } finally {
+              setBulkBusy(false);
+            }
+          }}
+        >
+          批量驳回
+        </button>
+        <button
+          className="btn-danger"
+          disabled={!selectedCount || bulkBusy}
+          onClick={async () => {
+            if (!confirm(`确定删除选中的 ${selectedCount} 条评论吗？`)) return;
+            setBulkBusy(true);
+            try {
+              const ids = Array.from(selectedIds);
+              await runSequential(ids, async (id) => {
+                await api.adminDeleteComment(id);
+              });
+              clearSelected();
+              await refresh();
+            } finally {
+              setBulkBusy(false);
+            }
+          }}
+        >
+          批量删除
+        </button>
+      </div>
+
       {err ? <div className="muted" style={{ color: "red", marginBottom: 14 }}>错误：{err}</div> : null}
       {loading ? <div className="muted">加载中…</div> : null}
       {!loading && items.length === 0 ? <div className="muted">暂无评论</div> : null}
@@ -1221,8 +1436,11 @@ function AdminCommentsPanel() {
             <div key={c.id} className="card" style={{ padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {c.postTitle}
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleOne(c.id)} />
+                    <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.postTitle}
+                    </div>
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>
                     <a href={`/post/${c.postSlug}`} target="_blank" rel="noreferrer">/post/{c.postSlug}</a>
@@ -1347,11 +1565,15 @@ function AdminLinksPanel() {
   const [links, setLinks] = useState<FriendLink[]>([]);
   const [linksErr, setLinksErr] = useState<string | null>(null);
   const [linksLoading, setLinksLoading] = useState(true);
+  const [selectedLinkIds, setSelectedLinkIds] = useState<Set<number>>(() => new Set());
+  const [linksBulkBusy, setLinksBulkBusy] = useState(false);
 
   const [reqStatus, setReqStatus] = useState<"pending" | "approved">("pending");
   const [requests, setRequests] = useState<LinkRequest[]>([]);
   const [reqErr, setReqErr] = useState<string | null>(null);
   const [reqLoading, setReqLoading] = useState(true);
+  const [selectedReqIds, setSelectedReqIds] = useState<Set<number>>(() => new Set());
+  const [reqBulkBusy, setReqBulkBusy] = useState(false);
 
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
@@ -1397,11 +1619,35 @@ function AdminLinksPanel() {
     refreshRequests();
   }, [refreshRequests]);
 
+  useEffect(() => {
+    setSelectedLinkIds((prev) => {
+      if (!prev.size) return prev;
+      const visible = new Set(links.map((l) => l.id));
+      const next = new Set<number>();
+      for (const id of prev) if (visible.has(id)) next.add(id);
+      return next;
+    });
+  }, [links]);
+
+  useEffect(() => {
+    setSelectedReqIds((prev) => {
+      if (!prev.size) return prev;
+      const visible = new Set(requests.map((r) => r.id));
+      const next = new Set<number>();
+      for (const id of prev) if (visible.has(id)) next.add(id);
+      return next;
+    });
+  }, [requests]);
+
   const detectIcon = async (url: string) => {
     const u = url.trim();
     if (!u) return "";
     const res = await api.adminDetectLinkIcon(u);
     return res.iconUrl || "";
+  };
+
+  const runSequential = async (ids: number[], fn: (id: number) => Promise<void>) => {
+    for (const id of ids) await fn(id);
   };
 
   return (
@@ -1501,6 +1747,52 @@ function AdminLinksPanel() {
             </div>
           </div>
 
+          <div className="adminBulkBar" style={{ marginBottom: 14 }}>
+            <label className="chkWrap" title="全选当前列表">
+              <input
+                type="checkbox"
+                checked={links.length > 0 && links.every((l) => selectedLinkIds.has(l.id))}
+                onChange={() => {
+                  const all = links.length > 0 && links.every((l) => selectedLinkIds.has(l.id));
+                  setSelectedLinkIds((prev) => {
+                    const next = new Set(prev);
+                    if (all) for (const l of links) next.delete(l.id);
+                    else for (const l of links) next.add(l.id);
+                    return next;
+                  });
+                }}
+              />
+              <span className="muted">全选</span>
+            </label>
+            <div className="muted">{selectedLinkIds.size ? `已选 ${selectedLinkIds.size} 个` : "未选择"}</div>
+            <div style={{ flex: 1 }} />
+            <button className="btn-ghost" disabled={!selectedLinkIds.size || linksBulkBusy} onClick={() => setSelectedLinkIds(new Set())}>
+              清空
+            </button>
+            <button
+              className="btn-danger"
+              disabled={!selectedLinkIds.size || linksBulkBusy}
+              onClick={async () => {
+                if (!confirm(`确定删除选中的 ${selectedLinkIds.size} 个友情链接吗？`)) return;
+                setLinksBulkBusy(true);
+                try {
+                  const ids = Array.from(selectedLinkIds);
+                  await runSequential(ids, async (id) => {
+                    await api.adminDeleteLink(id);
+                  });
+                  setSelectedLinkIds(new Set());
+                  await refreshLinks();
+                } catch (e: any) {
+                  setLinksErr(e?.message ?? String(e));
+                } finally {
+                  setLinksBulkBusy(false);
+                }
+              }}
+            >
+              批量删除
+            </button>
+          </div>
+
           {linksLoading ? <div className="muted">加载中…</div> : null}
           {!linksLoading && links.length === 0 ? <div className="muted">暂无友情链接</div> : null}
 
@@ -1508,6 +1800,20 @@ function AdminLinksPanel() {
             {links.map((l) => (
               <div key={l.id} className="card" style={{ padding: 16 }}>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <label className="chkWrap" title="选择此项">
+                    <input
+                      type="checkbox"
+                      checked={selectedLinkIds.has(l.id)}
+                      onChange={() =>
+                        setSelectedLinkIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(l.id)) next.delete(l.id);
+                          else next.add(l.id);
+                          return next;
+                        })
+                      }
+                    />
+                  </label>
                   <div style={{ width: 36, height: 36, borderRadius: 10, overflow: "hidden", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {l.iconUrl ? <img src={l.iconUrl} alt="" style={{ width: 22, height: 22 }} /> : <span style={{ opacity: 0.7, fontWeight: 900 }}>{l.title.slice(0, 1)}</span>}
                   </div>
@@ -1606,6 +1912,126 @@ function AdminLinksPanel() {
             </select>
             <button className="btn-ghost" onClick={refreshRequests} disabled={reqLoading}>刷新</button>
           </div>
+
+          <div className="adminBulkBar" style={{ marginBottom: 14 }}>
+            <label className="chkWrap" title="全选当前列表">
+              <input
+                type="checkbox"
+                checked={requests.length > 0 && requests.every((r) => selectedReqIds.has(r.id))}
+                onChange={() => {
+                  const all = requests.length > 0 && requests.every((r) => selectedReqIds.has(r.id));
+                  setSelectedReqIds((prev) => {
+                    const next = new Set(prev);
+                    if (all) for (const r of requests) next.delete(r.id);
+                    else for (const r of requests) next.add(r.id);
+                    return next;
+                  });
+                }}
+              />
+              <span className="muted">全选</span>
+            </label>
+            <div className="muted">{selectedReqIds.size ? `已选 ${selectedReqIds.size} 条` : "未选择"}</div>
+            <div style={{ flex: 1 }} />
+            <button className="btn-ghost" disabled={!selectedReqIds.size || reqBulkBusy} onClick={() => setSelectedReqIds(new Set())}>
+              清空
+            </button>
+            <button
+              className="btn-ghost"
+              disabled={!selectedReqIds.size || reqBulkBusy}
+              onClick={async () => {
+                setReqBulkBusy(true);
+                try {
+                  const ids = Array.from(selectedReqIds);
+                  await runSequential(ids, async (id) => {
+                    await api.adminUpdateLinkRequest(id, { status: "approved" });
+                  });
+                  await refreshRequests();
+                } catch (e: any) {
+                  setReqErr(e?.message ?? String(e));
+                } finally {
+                  setReqBulkBusy(false);
+                }
+              }}
+            >
+              批量通过
+            </button>
+            <button
+              className="btn-ghost"
+              disabled={!selectedReqIds.size || reqBulkBusy}
+              onClick={async () => {
+                setReqBulkBusy(true);
+                try {
+                  const ids = Array.from(selectedReqIds);
+                  await runSequential(ids, async (id) => {
+                    await api.adminUpdateLinkRequest(id, { status: "pending" });
+                  });
+                  await refreshRequests();
+                } catch (e: any) {
+                  setReqErr(e?.message ?? String(e));
+                } finally {
+                  setReqBulkBusy(false);
+                }
+              }}
+            >
+              批量驳回
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!selectedReqIds.size || reqBulkBusy}
+              onClick={async () => {
+                if (!confirm(`确定通过并加入友情链接（${selectedReqIds.size} 条）吗？`)) return;
+                setReqBulkBusy(true);
+                try {
+                  const ids = Array.from(selectedReqIds);
+                  await runSequential(ids, async (id) => {
+                    const r = requests.find((x) => x.id === id);
+                    if (!r) return;
+                    const iconUrl = await detectIcon(r.url).catch(() => "");
+                    await api.adminCreateLink({
+                      title: r.name,
+                      url: r.url,
+                      description: r.description ?? "",
+                      iconUrl: iconUrl || "",
+                      sortOrder: 0,
+                    });
+                    await api.adminUpdateLinkRequest(id, { status: "approved" });
+                  });
+                  setSelectedReqIds(new Set());
+                  await Promise.all([refreshLinks(), refreshRequests()]);
+                  setTab("links");
+                } catch (e: any) {
+                  setReqErr(e?.message ?? String(e));
+                } finally {
+                  setReqBulkBusy(false);
+                }
+              }}
+            >
+              通过并加入友情链接
+            </button>
+            <button
+              className="btn-danger"
+              disabled={!selectedReqIds.size || reqBulkBusy}
+              onClick={async () => {
+                if (!confirm(`确定删除选中的 ${selectedReqIds.size} 条申请吗？`)) return;
+                setReqBulkBusy(true);
+                try {
+                  const ids = Array.from(selectedReqIds);
+                  await runSequential(ids, async (id) => {
+                    await api.adminDeleteLinkRequest(id);
+                  });
+                  setSelectedReqIds(new Set());
+                  await refreshRequests();
+                } catch (e: any) {
+                  setReqErr(e?.message ?? String(e));
+                } finally {
+                  setReqBulkBusy(false);
+                }
+              }}
+            >
+              批量删除
+            </button>
+          </div>
+
           {reqErr ? <div className="muted" style={{ color: "red", marginBottom: 14 }}>错误：{reqErr}</div> : null}
           {reqLoading ? <div className="muted">加载中…</div> : null}
           {!reqLoading && requests.length === 0 ? <div className="muted">暂无申请</div> : null}
@@ -1615,8 +2041,22 @@ function AdminLinksPanel() {
               <div key={r.id} className="card" style={{ padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <a href={r.url} target="_blank" rel="noreferrer">{r.name}</a>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedReqIds.has(r.id)}
+                        onChange={() =>
+                          setSelectedReqIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(r.id)) next.delete(r.id);
+                            else next.add(r.id);
+                            return next;
+                          })
+                        }
+                      />
+                      <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <a href={r.url} target="_blank" rel="noreferrer">{r.name}</a>
+                      </div>
                     </div>
                     <div className="muted" style={{ fontSize: 12 }}>
                       {r.url} · {shortDate(r.createdAt)}

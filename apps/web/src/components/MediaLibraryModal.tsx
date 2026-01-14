@@ -40,6 +40,7 @@ export function MediaLibraryPanel({
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const refresh = async () => {
     setErr(null);
@@ -72,6 +73,30 @@ export function MediaLibraryPanel({
     if (!needle) return items;
     return items.filter((it) => it.name.toLowerCase().includes(needle));
   }, [items, q]);
+
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev.size) return prev;
+      const visible = new Set(items.map((it) => it.name));
+      const next = new Set<string>();
+      for (const name of prev) if (visible.has(name)) next.add(name);
+      return next;
+    });
+  }, [items]);
+
+  const filteredNames = filtered.map((it) => it.name);
+  const allSelected = filteredNames.length > 0 && filteredNames.every((n) => selected.has(n));
+  const selectedCount = selected.size;
+  const toggleAll = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const n of filteredNames) next.delete(n);
+      } else {
+        for (const n of filteredNames) next.add(n);
+      }
+      return next;
+    });
 
   return (
     <div
@@ -127,6 +152,46 @@ export function MediaLibraryPanel({
             />
           </label>
 
+          <label className="pill" style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer" }} title="全选/取消全选（基于当前筛选）">
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ width: 18, height: 18 }} />
+            全选
+          </label>
+
+          {selectedCount ? (
+            <>
+              <span className="muted" style={{ whiteSpace: "nowrap" }}>已选 {selectedCount}</span>
+              <button className="pill" onClick={() => setSelected(new Set())} title="清空选择">
+                清空
+              </button>
+              <button
+                className="pill"
+                title="批量删除"
+                onClick={async () => {
+                  if (!selectedCount) return;
+                  if (!confirm(`删除选中的 ${selectedCount} 张图片？（引用这些 URL 的地方会失效）`)) return;
+                  setErr(null);
+                  setBusy(true);
+                  try {
+                    const names = Array.from(selected);
+                    for (const name of names) {
+                      await api.adminDeleteUpload(name);
+                    }
+                    setSelected(new Set());
+                    await refresh();
+                  } catch (err: any) {
+                    setErr(err?.message ?? String(err));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--muted2)" }}
+              >
+                <MdDelete />
+                批量删除
+              </button>
+            </>
+          ) : null}
+
           <div style={{ flex: 1, minWidth: 240 }}>
             <div style={{ position: "relative" }}>
               <MdSearch style={{ position: "absolute", left: 10, top: 10, opacity: 0.7 }} />
@@ -157,29 +222,59 @@ export function MediaLibraryPanel({
         >
           {filtered.map((it) => (
             <div key={it.name} className="card" style={{ overflow: "hidden", padding: 0 }}>
-              <button
-                onClick={() => {
-                  onSelect(it.url);
-                  if (autoCloseOnSelect) onRequestClose?.();
-                }}
-                title="选择此图片"
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: 0,
-                  background: "transparent",
-                  border: "none",
-                  boxShadow: "none",
-                  cursor: "pointer",
-                }}
-              >
-                <img
-                  src={it.thumbUrl ?? it.url}
-                  alt={it.name}
-                  loading="lazy"
-                  style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }}
-                />
-              </button>
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => {
+                    onSelect(it.url);
+                    if (autoCloseOnSelect) onRequestClose?.();
+                  }}
+                  title="选择此图片"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: 0,
+                    background: "transparent",
+                    border: "none",
+                    boxShadow: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <img
+                    src={it.thumbUrl ?? it.url}
+                    alt={it.name}
+                    loading="lazy"
+                    style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }}
+                  />
+                </button>
+
+                <label
+                  className="mediaCheck"
+                  title="选择"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    left: 8,
+                    padding: 6,
+                    borderRadius: 10,
+                    background: "rgba(0,0,0,0.35)",
+                    display: "inline-flex",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(it.name)}
+                    onChange={() =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(it.name)) next.delete(it.name);
+                        else next.add(it.name);
+                        return next;
+                      })
+                    }
+                  />
+                </label>
+              </div>
 
               <div style={{ padding: 12, display: "grid", gap: 10 }}>
                 <div style={{ display: "grid", gap: 3 }}>

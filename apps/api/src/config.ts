@@ -13,6 +13,7 @@ export const config = {
   port: toInt(process.env.PORT, 8787),
   databasePath:
     process.env.DATABASE_PATH ?? path.resolve(process.cwd(), "data", "yablog.db"),
+  redisUrl: (process.env.REDIS_URL ?? "").trim() || null,
   jwtSecret: process.env.JWT_SECRET ?? "dev-only-change-me",
   adminUsername: process.env.ADMIN_USERNAME,
   adminPassword: process.env.ADMIN_PASSWORD,

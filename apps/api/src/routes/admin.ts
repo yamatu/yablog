@@ -4,6 +4,7 @@ import net from "node:net";
 import slugify from "slugify";
 import { z } from "zod";
 
+import type { Cache } from "../cache.js";
 import type { Db } from "../db.js";
 import {
   createPost,
@@ -53,7 +54,7 @@ const uniqueSlug = (db: Db, rawSlug: string, excludePostId?: number) => {
   }
 };
 
-export const mountAdminRoutes = (router: Router, db: Db) => {
+export const mountAdminRoutes = (router: Router, db: Db, cache: Cache) => {
   router.get("/posts", (req, res) => {
     const query = z
       .object({
@@ -108,6 +109,9 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       })),
     });
 
+    void cache.bump("posts");
+    void cache.bump("tags");
+    void cache.bump("categories");
     res.json({ id: postId, slug });
   });
 
@@ -140,6 +144,9 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       })),
     });
 
+    void cache.bump("posts");
+    void cache.bump("tags");
+    void cache.bump("categories");
     res.json({ ok: true, slug });
   });
 
@@ -170,12 +177,16 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       id,
     );
 
+    void cache.bump("posts");
     res.json({ ok: true });
   });
 
   router.delete("/posts/:id", (req, res) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
     deletePost(db, id);
+    void cache.bump("posts");
+    void cache.bump("tags");
+    void cache.bump("categories");
     res.json({ ok: true });
   });
 
@@ -201,12 +212,14 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       .parse(req.body);
     const ok = updateCommentAdmin(db, { id, status: body.status, contentMd: body.contentMd });
     if (!ok) return res.status(404).json({ error: "not_found" });
+    void cache.bump("comments");
     res.json({ ok: true });
   });
 
   router.delete("/comments/:id", (req, res) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
     deleteCommentAdmin(db, id);
+    void cache.bump("comments");
     res.json({ ok: true });
   });
 
@@ -231,6 +244,7 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       iconUrl: body.iconUrl ?? "",
       sortOrder: body.sortOrder ?? 0,
     });
+    void cache.bump("links");
     res.json({ ok: true, id });
   });
 
@@ -245,12 +259,14 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
       iconUrl: body.iconUrl ?? "",
       sortOrder: body.sortOrder ?? 0,
     });
+    void cache.bump("links");
     res.json({ ok: true });
   });
 
   router.delete("/links/:id", (req, res) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
     deleteLinkAdmin(db, id);
+    void cache.bump("links");
     res.json({ ok: true });
   });
 
@@ -263,12 +279,14 @@ export const mountAdminRoutes = (router: Router, db: Db) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
     const body = z.object({ status: z.enum(["pending", "approved"]) }).parse(req.body);
     updateLinkRequestAdmin(db, { id, status: body.status });
+    void cache.bump("linkRequests");
     res.json({ ok: true });
   });
 
   router.delete("/link-requests/:id", (req, res) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
     deleteLinkRequestAdmin(db, id);
+    void cache.bump("linkRequests");
     res.json({ ok: true });
   });
 
