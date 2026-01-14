@@ -69,10 +69,10 @@ export function Markdown({
     return (
       <div className="codeBlock">
         <div className="codeBlockBar">
-          <div className="codeBlockLang">{lang || "code"}</div>
+          <div className="codeBlockLang" title={lang || "code"}>{lang || "code"}</div>
           <button className="codeCopyBtn" type="button" onClick={onCopy} title="复制代码">
             {copied ? <MdDone /> : <MdContentCopy />}
-            {copied ? "已复制" : "复制"}
+            <span className="codeCopyText">{copied ? "已复制" : "复制"}</span>
           </button>
         </div>
         <pre>

@@ -1161,6 +1161,10 @@ button:hover,
   font-size: 12px;
   letter-spacing: 0.2px;
   color: color-mix(in oklab, var(--code-text) 70%, transparent);
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .markdown .codeCopyBtn {
@@ -1174,11 +1178,17 @@ button:hover,
   color: var(--code-text);
   font-size: 12px;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
 .markdown .codeCopyBtn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.markdown .codeCopyBtn svg {
+  width: 18px;
+  height: 18px;
 }
 
 .markdown .codeBlock pre {
@@ -1195,6 +1205,26 @@ button:hover,
   font-size: 13px;
   line-height: 1.7;
   color: var(--code-text);
+}
+
+@media (max-width: 520px) {
+  .markdown .codeBlockBar {
+    padding: 8px 10px;
+    gap: 10px;
+  }
+  .markdown .codeCopyBtn {
+    padding: 7px 9px;
+    border-radius: 10px;
+  }
+  .markdown .codeCopyText {
+    display: none;
+  }
+  .markdown .codeBlock pre {
+    padding: 12px 12px 14px;
+  }
+  .markdown .codeBlock code {
+    font-size: 12.5px;
+  }
 }
 
 .scrollTopBtn {
