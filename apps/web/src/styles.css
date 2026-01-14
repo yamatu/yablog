@@ -1149,11 +1149,10 @@ button:hover,
 }
 
 .markdown .codeBlockBar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
+  column-gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--code-border);
   background: color-mix(in oklab, var(--code-bg) 92%, transparent);
@@ -1164,9 +1163,7 @@ button:hover,
   font-size: 12px;
   letter-spacing: 0.2px;
   color: color-mix(in oklab, var(--code-text) 70%, transparent);
-  flex: 1 1 auto;
   min-width: 0;
-  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1250,7 +1247,11 @@ button:hover,
 @media (max-width: 680px) {
   .markdown .codeBlockBar {
     padding: 8px 10px;
-    gap: 8px;
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+  .markdown .codeCopyBtn {
+    justify-self: end;
   }
   .markdown .codeCopyBtn {
     padding: 7px 9px;
