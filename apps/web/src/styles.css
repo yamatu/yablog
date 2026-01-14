@@ -1124,6 +1124,11 @@ button:hover,
 .markdown {
   padding: 34px;
   line-height: 1.8;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
 }
 
 @media (max-width: 900px) {
@@ -1142,6 +1147,8 @@ button:hover,
 .markdown a {
   color: var(--accent);
   border-bottom: 1px solid var(--accent);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .markdown a:hover {
@@ -1157,6 +1164,39 @@ button:hover,
   padding: 2px 6px;
   border-radius: 8px;
   border: 1px solid var(--code-border);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown img,
+.markdown video,
+.markdown iframe {
+  max-width: 100%;
+}
+
+.markdown table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown th,
+.markdown td {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.markdown thead th {
+  background: color-mix(in oklab, var(--bg2) 70%, transparent);
+}
+
+.markdown table code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .markdown .codeBlock {
