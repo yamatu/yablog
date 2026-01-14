@@ -5,6 +5,7 @@ import { api, Post } from "../api";
 import { PostCard } from "../components/PostCard";
 import { Sidebar } from "../components/Sidebar";
 import { useSite } from "../site";
+import { placeholderImageDataUrl } from "../placeholder";
 
 function hashString(input: string) {
   let h = 2166136261;
@@ -26,7 +27,7 @@ function chipSize(name: string) {
 
 // Reusable Page Banner Component
 const PageBanner = ({ title, bg }: { title: string; bg?: string }) => {
-  const image = bg || "https://source.unsplash.com/random/1920x600?nature,water";
+  const image = (bg && bg.trim() ? bg : "") || placeholderImageDataUrl(`banner:${title}`, title);
   return (
     <div className="page-banner" style={{ backgroundImage: `url(${image})` }}>
       <div className="hero-overlay" />

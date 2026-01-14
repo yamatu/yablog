@@ -5,6 +5,7 @@ import { api } from "../api";
 import { Markdown } from "../components/Markdown";
 import { Sidebar } from "../components/Sidebar";
 import { useSite } from "../site";
+import { placeholderImageDataUrl } from "../placeholder";
 
 export function AboutPage() {
   const { site } = useSite();
@@ -30,7 +31,10 @@ export function AboutPage() {
     };
   }, []);
 
-  const bg = heroImage ?? site?.images.aboutHero ?? "https://source.unsplash.com/random/1920x600?person";
+  const bg =
+    (heroImage && heroImage.trim() ? heroImage : "") ||
+    (site?.images.aboutHero && site.images.aboutHero.trim() ? site.images.aboutHero : "") ||
+    placeholderImageDataUrl("aboutHero", about?.title ?? "关于");
 
   return (
     <div className="butterfly-layout">

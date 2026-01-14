@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { MdDateRange, MdLabel, MdPushPin } from "react-icons/md";
 import type { Post } from "../api";
 import { useSite } from "../site";
+import { placeholderImageDataUrl } from "../placeholder";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -22,8 +23,8 @@ export function PostCard({
   const isAlt = index % 2 === 1;
   const coverImage =
     post.coverImage ||
-    site?.images.defaultPostCover ||
-    `https://source.unsplash.com/random/1200x900?nature&sig=${post.id}`;
+    (site?.images.defaultPostCover && site.images.defaultPostCover.trim() ? site.images.defaultPostCover : "") ||
+    placeholderImageDataUrl(`post:${post.id}`, post.title);
 
   if (variant === "square") {
     return (

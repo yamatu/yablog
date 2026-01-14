@@ -6,6 +6,7 @@ import { api, Post } from "../api";
 import { PostCard } from "../components/PostCard";
 import { Sidebar } from "../components/Sidebar";
 import { useSite } from "../site";
+import { placeholderImageDataUrl } from "../placeholder";
 
 export function HomePage() {
   const { site } = useSite();
@@ -46,12 +47,12 @@ export function HomePage() {
     document.getElementById("content")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const heroImage =
-    site?.images.homeHero ||
-    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80";
-
   const heroTitle = site?.home?.title || "YaBlog";
   const heroSubtitle = site?.home?.subtitle || "Minimal · Elegant · Powerful";
+
+  const heroImage =
+    (site?.images.homeHero && site.images.homeHero.trim() ? site.images.homeHero : "") ||
+    placeholderImageDataUrl("homeHero", heroTitle);
 
   const goToPage = async (nextPage: number) => {
     const p = Math.max(1, nextPage);

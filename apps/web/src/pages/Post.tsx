@@ -1,11 +1,12 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { MdDateRange, MdLabel, MdFolder, MdRefresh } from "react-icons/md";
+import { MdDateRange, MdLabel, MdFolder, MdRefresh, MdKeyboardArrowUp } from "react-icons/md";
 
 import { api, Captcha, Comment, Post } from "../api";
 import { Markdown } from "../components/Markdown";
 import { buildToc } from "../markdown";
 import { useSite } from "../site";
+import { placeholderImageDataUrl } from "../placeholder";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -30,6 +31,7 @@ export function PostPage() {
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showTop, setShowTop] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -79,6 +81,13 @@ export function PostPage() {
     loadComments();
   }, [slug, refreshCaptcha, loadComments]);
 
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 600);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const toc = useMemo(() => post ? buildToc(post.contentMd) : [], [post]);
   let headingCursor = 0;
   const nextHeadingId = () => toc[headingCursor++]?.id;
@@ -108,8 +117,8 @@ export function PostPage() {
 
   const headerImage =
     post.coverImage ||
-    site?.images.defaultPostCover ||
-    `https://source.unsplash.com/random/1920x1080?nature&sig=${post.id}`;
+    (site?.images.defaultPostCover && site.images.defaultPostCover.trim() ? site.images.defaultPostCover : "") ||
+    placeholderImageDataUrl(`postHeader:${post.id}`, post.title);
 
   return (
     <div className="butterfly-layout">
@@ -313,6 +322,16 @@ export function PostPage() {
           )}
         </aside>
       </div>
+
+      <button
+        type="button"
+        className={`scrollTopBtn ${showTop ? "show" : ""}`}
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="回到顶部"
+        title="回到顶部"
+      >
+        <MdKeyboardArrowUp />
+      </button>
     </div>
   );
 }

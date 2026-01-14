@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { Markdown } from "./Markdown";
 import { useSite } from "../site";
+import { placeholderImageDataUrl } from "../placeholder";
 
 export function Sidebar() {
   const { site } = useSite();
@@ -38,7 +39,7 @@ export function Sidebar() {
   const avatar =
     sidebar?.avatarUrl && sidebar.avatarUrl.trim()
       ? sidebar.avatarUrl
-      : "https://api.dicebear.com/7.x/notionists/svg?seed=YaBlog";
+      : placeholderImageDataUrl("avatar", sidebar?.name ?? "YaBlog");
 
   const socialIcon = (type: string) => {
     const t = type.toLowerCase();

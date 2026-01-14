@@ -5,6 +5,7 @@ import { api, Captcha, Link, LinkRequest } from "../api";
 import { useSite } from "../site";
 import { Sidebar } from "../components/Sidebar";
 import { Markdown } from "../components/Markdown";
+import { placeholderImageDataUrl } from "../placeholder";
 
 export function LinksPage() {
   const { site } = useSite();
@@ -53,7 +54,9 @@ export function LinksPage() {
     refresh();
   }, [refreshCaptcha, refresh]);
 
-  const bg = site?.images.archiveHero || "https://source.unsplash.com/random/1920x600?landscape";
+  const bg =
+    (site?.images.archiveHero && site.images.archiveHero.trim() ? site.images.archiveHero : "") ||
+    placeholderImageDataUrl("linksHero", "友情链接");
 
   return (
     <div className="butterfly-layout">
@@ -239,4 +242,3 @@ export function LinksPage() {
     </div>
   );
 }
-

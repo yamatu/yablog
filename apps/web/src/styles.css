@@ -27,6 +27,11 @@
   /* Admin/Glass */
   --glass-bg: rgba(255, 255, 255, 0.95);
 
+  --code-bg: #f6f7f9;
+  --code-border: rgba(31, 45, 61, 0.14);
+  --code-text: #111827;
+  --code-inline-bg: rgba(31, 45, 61, 0.06);
+
   --nav-bg: rgba(255, 255, 255, 0.95);
   --nav-text: #4c4948;
 
@@ -45,6 +50,10 @@
     --card: #1e1e1e;
     --card2: #252525;
     --glass-bg: #1e1e1e;
+    --code-bg: #0b0b0c;
+    --code-border: rgba(255, 255, 255, 0.12);
+    --code-text: #e5e7eb;
+    --code-inline-bg: rgba(255, 255, 255, 0.10);
     --shadow: 0 4px 8px 6px rgba(0, 0, 0, 0.2);
     --shadow-hover: 0 4px 12px 12px rgba(0, 0, 0, 0.4);
     --nav-bg: rgba(18, 18, 18, 0.9);
@@ -63,6 +72,10 @@
   --card: #1e1e1e;
   --card2: #252525;
   --glass-bg: #1e1e1e;
+  --code-bg: #0b0b0c;
+  --code-border: rgba(255, 255, 255, 0.12);
+  --code-text: #e5e7eb;
+  --code-inline-bg: rgba(255, 255, 255, 0.10);
   --shadow: 0 4px 8px 6px rgba(0, 0, 0, 0.2);
   --shadow-hover: 0 4px 12px 12px rgba(0, 0, 0, 0.4);
   --nav-bg: rgba(18, 18, 18, 0.9);
@@ -1113,6 +1126,107 @@ button:hover,
 .markdown a:hover {
   color: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+
+.markdown .inlineCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.95em;
+  background: var(--code-inline-bg);
+  color: var(--code-text);
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--code-border);
+}
+
+.markdown .codeBlock {
+  border-radius: 14px;
+  border: 1px solid var(--code-border);
+  background: var(--code-bg);
+  overflow: hidden;
+  margin: 18px 0;
+}
+
+.markdown .codeBlockBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--code-border);
+  background: color-mix(in oklab, var(--code-bg) 92%, transparent);
+}
+
+.markdown .codeBlockLang {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  color: color-mix(in oklab, var(--code-text) 70%, transparent);
+}
+
+.markdown .codeCopyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--code-border);
+  background: transparent;
+  color: var(--code-text);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.markdown .codeCopyBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.markdown .codeBlock pre {
+  margin: 0;
+  padding: 14px 14px 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown .codeBlock code {
+  display: block;
+  min-width: max-content;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--code-text);
+}
+
+.scrollTopBtn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  background: color-mix(in oklab, var(--card) 82%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: 0.25s;
+  z-index: 120;
+}
+
+.scrollTopBtn.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.scrollTopBtn svg {
+  width: 26px;
+  height: 26px;
 }
 
 .footer {
