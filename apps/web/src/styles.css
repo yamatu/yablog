@@ -616,8 +616,15 @@ a:hover {
   transition: all 0.3s;
 }
 
+/* Slightly reduce sidebar on tablets so TOC still fits. */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 260px;
+  }
+}
+
 /* Mobile Responsive */
-@media (max-width: 900px) {
+@media (max-width: 720px) {
   .main-content {
     flex-direction: column;
   }
@@ -625,6 +632,7 @@ a:hover {
   .sidebar {
     width: 100%;
     position: static;
+    order: -1;
   }
 
   /* Post page: disable sticky TOC on mobile */
@@ -1185,12 +1193,16 @@ button:hover,
   margin: 0;
   padding: 14px 14px 16px;
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
 }
 
 .markdown .codeBlock code {
   display: block;
-  min-width: max-content;
+  max-width: 100%;
+  white-space: pre;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.7;
