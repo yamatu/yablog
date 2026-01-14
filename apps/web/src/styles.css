@@ -1144,6 +1144,8 @@ button:hover,
   background: var(--code-bg);
   overflow: hidden;
   margin: 18px 0;
+  position: relative;
+  max-width: 100%;
 }
 
 .markdown .codeBlockBar {
@@ -1195,22 +1197,53 @@ button:hover,
   margin: 0;
   padding: 14px 14px 16px;
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  scrollbar-gutter: stable;
 }
 
 .markdown .codeBlock code {
-  display: block;
-  min-width: max-content;
+  display: inline-block;
+  min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.7;
   color: var(--code-text);
 }
 
+.markdown .codeSwipeHint {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--code-border);
+  background: color-mix(in oklab, var(--code-bg) 92%, transparent);
+  color: color-mix(in oklab, var(--code-text) 72%, transparent);
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: 0.2s;
+}
+
+.markdown .codeSwipeHint.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 @media (max-width: 520px) {
   .markdown .codeBlockBar {
     padding: 8px 10px;
     gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .markdown .codeBlockLang {
+    max-width: 100%;
+    flex: 1 0 100%;
   }
   .markdown .codeCopyBtn {
     padding: 7px 9px;
@@ -1224,6 +1257,9 @@ button:hover,
   }
   .markdown .codeBlock code {
     font-size: 12.5px;
+  }
+  .markdown .codeSwipeHint {
+    display: inline-flex;
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -55,6 +55,9 @@ export function Markdown({
 
     const lang = (className ?? "").match(/language-([\w-]+)/i)?.[1] ?? "";
     const [copied, setCopied] = useState(false);
+    const preRef = useRef<HTMLPreElement | null>(null);
+    const [overflowing, setOverflowing] = useState(false);
+    const [showSwipeHint, setShowSwipeHint] = useState(false);
 
     const onCopy = async () => {
       try {
@@ -66,8 +69,37 @@ export function Markdown({
       }
     };
 
+    useEffect(() => {
+      const el = preRef.current;
+      if (!el) return;
+
+      const check = () => {
+        const of = el.scrollWidth > el.clientWidth + 1;
+        setOverflowing(of);
+        setShowSwipeHint(of && el.scrollLeft < 6);
+      };
+
+      check();
+      const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+      ro?.observe(el);
+      window.addEventListener("resize", check, { passive: true } as any);
+
+      return () => {
+        ro?.disconnect();
+        window.removeEventListener("resize", check as any);
+      };
+    }, [text]);
+
+    useEffect(() => {
+      const el = preRef.current;
+      if (!el || !overflowing) return;
+      const onScroll = () => setShowSwipeHint(el.scrollLeft < 6);
+      el.addEventListener("scroll", onScroll, { passive: true });
+      return () => el.removeEventListener("scroll", onScroll as any);
+    }, [overflowing]);
+
     return (
-      <div className="codeBlock">
+      <div className={`codeBlock ${overflowing ? "overflow" : ""}`}>
         <div className="codeBlockBar">
           <div className="codeBlockLang" title={lang || "code"}>{lang || "code"}</div>
           <button className="codeCopyBtn" type="button" onClick={onCopy} title="复制代码">
@@ -75,9 +107,12 @@ export function Markdown({
             <span className="codeCopyText">{copied ? "已复制" : "复制"}</span>
           </button>
         </div>
-        <pre>
+        <pre ref={preRef}>
           <code className={className}>{text}</code>
         </pre>
+        {overflowing ? (
+          <div className={`codeSwipeHint ${showSwipeHint ? "show" : ""}`}>左右滑动</div>
+        ) : null}
       </div>
     );
   };
