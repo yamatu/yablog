@@ -193,7 +193,7 @@ function AdminDashboard({ user }: { user: User }) {
           <h2 style={{ margin: 0 }}>控制台</h2>
           <div className="muted">欢迎回来，{user.username}</div>
         </div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: 12 }}>
           <button className="btn-primary" onClick={() => navigate("/admin/new")}>+ 新建文章</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/media")}>图库</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/comments")}>评论</button>
