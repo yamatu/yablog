@@ -348,6 +348,11 @@ app.use((req, res, next) => {
   const p = req.path || "";
   if (p.startsWith("/assets/") || p.startsWith("/uploads/")) return next();
   // Never cache admin/auth.
+  // Note: `/admin/*` is the SPA admin UI (HTML). Never cache it even if CDN cache is enabled.
+  if (p === "/admin" || p.startsWith("/admin/")) {
+    setNoStore(res);
+    return next();
+  }
   if (p.startsWith("/api/admin") || p.startsWith("/api/auth") || p.startsWith("/api/health")) {
     setNoStore(res);
     return next();
