@@ -971,6 +971,55 @@ button:hover,
   color: var(--accent);
 }
 
+/* Shared button variants (public + admin; admin has more specific overrides). */
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.btn-danger {
+  background: #ff4d4f;
+  color: #fff;
+  border-color: transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.btn-danger:hover {
+  color: #fff;
+  border-color: transparent;
+}
+
 /* Admin button consistency */
 .adminRoot button,
 .adminRoot .pill {
@@ -1365,19 +1414,148 @@ button:hover,
 }
 
 /* AI Chat */
+.aiPage {
+  min-height: 100vh;
+  background:
+    radial-gradient(1000px 420px at 20% -10%, rgba(73, 177, 245, 0.26), transparent 55%),
+    radial-gradient(800px 420px at 80% 0%, rgba(255, 114, 66, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 50% 120%, rgba(73, 177, 245, 0.12), transparent 60%),
+    var(--bg);
+}
+
+.aiHero {
+  padding: 92px 0 26px;
+  position: relative;
+  overflow: hidden;
+}
+
+.aiHero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(73, 177, 245, 0.62), rgba(255, 114, 66, 0.50)),
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.28), transparent 55%);
+  filter: saturate(1.2);
+}
+
+.aiHero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 120%, rgba(0, 0, 0, 0.15), transparent 55%);
+}
+
+.aiHeroInner {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+}
+
+.aiHeroTitle {
+  font-weight: 900;
+  font-size: 2.35rem;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+.aiHeroSub {
+  margin-top: 10px;
+  font-weight: 600;
+  opacity: 0.92;
+  text-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
 .chatCard {
   max-width: min(1100px, 100%);
   margin: 0 auto;
   overflow: hidden;
 }
 
-.chatHeader {
+.aiCard {
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  background: color-mix(in oklab, var(--card) 86%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.aiHeader {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in oklab, var(--card) 92%, transparent);
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  flex-wrap: wrap;
+}
+
+.aiHeaderLeft,
+.aiHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.aiMemTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg2) 65%, transparent);
+  min-height: 38px;
+  max-width: 260px;
+}
+
+.aiMemName {
+  font-weight: 800;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiAutoSave {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg2) 65%, transparent);
+  min-height: 38px;
+}
+
+.aiSwitch {
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  background: color-mix(in oklab, var(--card) 82%, transparent);
+  position: relative;
+}
+
+.aiSwitch[data-state="checked"] {
+  background: color-mix(in oklab, var(--accent) 55%, var(--card));
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+}
+
+.aiSwitchThumb {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: var(--bg2);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  transition: transform 0.18s ease;
+  transform: translateX(2px);
+}
+
+.aiSwitchThumb[data-state="checked"] {
+  transform: translateX(22px);
 }
 
 .chatMessages {
@@ -1389,6 +1567,12 @@ button:hover,
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   background: color-mix(in oklab, var(--bg2) 55%, transparent);
+}
+
+.aiMessages {
+  background:
+    radial-gradient(900px 360px at 10% 10%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 60%),
+    color-mix(in oklab, var(--bg2) 60%, transparent);
 }
 
 .chatRow {
@@ -1406,7 +1590,7 @@ button:hover,
 
 .chatBubble {
   max-width: min(860px, 100%);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 12px 14px;
   border: 1px solid var(--border);
   box-shadow: none;
@@ -1414,42 +1598,165 @@ button:hover,
 }
 
 .chatBubbleAssistant {
-  background: var(--card);
+  background: color-mix(in oklab, var(--card) 92%, transparent);
 }
 
 .chatBubbleUser {
-  background: color-mix(in oklab, var(--accent) 16%, var(--card));
+  background: color-mix(in oklab, var(--accent) 18%, var(--card));
   border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
 }
 
-.chatComposer {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  padding: 14px 16px 16px;
+.aiComposer {
+  padding: 12px 14px 14px;
   border-top: 1px solid var(--border);
   background: color-mix(in oklab, var(--card) 92%, transparent);
 }
 
-.chatComposer textarea {
-  width: 100%;
-  min-height: 46px;
-  resize: vertical;
-  max-height: 220px;
+.aiComposerActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-top: 10px;
+  flex-wrap: wrap;
+}
+
+.aiTabsList {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg2) 70%, transparent);
+}
+
+.aiTabsTrigger {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.aiTabsTrigger[data-state="active"] {
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--border) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+}
+
+.aiTabsContent {
+  padding-top: 10px;
+}
+
+.aiPreview {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg2) 70%, transparent);
+  padding: 12px 12px;
+  min-height: 110px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.aiMarkdown {
+  line-height: 1.65;
+}
+
+/* Dropdown menu */
+.aiMenu {
+  min-width: 260px;
+  max-width: 340px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-hover);
+  padding: 8px;
+  z-index: 200;
+}
+
+.aiMenuTitle {
+  padding: 6px 8px 8px;
+  font-weight: 800;
+  color: var(--text-highlight);
+  font-size: 13px;
+}
+
+.aiMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 12px;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.aiMenuItem:hover,
+.aiMenuItem[data-highlighted] {
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.aiMenuItemText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiMenuSep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+.aiMenuDanger {
+  color: #ff4d4f;
+}
+
+/* Dialog */
+.aiDialogOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 220;
+}
+
+.aiDialogContent {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100vw - 24px));
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 94%, transparent);
+  box-shadow: var(--shadow-hover);
+  padding: 16px;
+  z-index: 230;
+}
+
+.aiDialogTitle {
+  font-weight: 900;
+  color: var(--text-highlight);
 }
 
 @media (max-width: 520px) {
+  .aiHeroTitle {
+    font-size: 2.0rem;
+  }
   .chatMessages {
     padding: 12px;
     max-height: min(65vh, 640px);
   }
-  .chatComposer {
-    grid-template-columns: 1fr;
-  }
-  .chatComposer button {
-    width: 100%;
-  }
   .chatBubble {
+    max-width: 100%;
+  }
+  .aiMemTrigger {
     max-width: 100%;
   }
 }
