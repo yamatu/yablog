@@ -108,6 +108,11 @@ export type SiteSettings = {
       allowedOrigins: string[];
     };
   };
+  cdn: {
+    cloudflare: {
+      cacheEnabled: boolean;
+    };
+  };
   images: {
     homeHero: string;
     archiveHero: string;

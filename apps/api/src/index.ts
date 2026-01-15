@@ -328,6 +328,48 @@ app.use((req, res, next) => {
   return next();
 });
 
+// Cloudflare "Cache Everything" can make new posts not visible immediately.
+// This switch lets admin force `no-store` on HTML + public GET APIs.
+const setNoStore = (res: express.Response) => {
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("pragma", "no-cache");
+  res.setHeader("expires", "0");
+  // Hints for CDNs/reverse proxies.
+  res.setHeader("cdn-cache-control", "no-store");
+  res.setHeader("surrogate-control", "no-store");
+};
+const setShortCache = (res: express.Response, sec: number) => {
+  const v = `public, max-age=${sec}`;
+  res.setHeader("cache-control", v);
+  res.setHeader("cdn-cache-control", v);
+  res.setHeader("surrogate-control", v);
+};
+app.use((req, res, next) => {
+  const p = req.path || "";
+  if (p.startsWith("/assets/") || p.startsWith("/uploads/")) return next();
+  // Never cache admin/auth.
+  if (p.startsWith("/api/admin") || p.startsWith("/api/auth") || p.startsWith("/api/health")) {
+    setNoStore(res);
+    return next();
+  }
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    setNoStore(res);
+    return next();
+  }
+
+  const enabled = Boolean(siteCache?.cdn?.cloudflare?.cacheEnabled);
+  if (!enabled) {
+    setNoStore(res);
+    return next();
+  }
+
+  // Conservative defaults (still allows CDN caching, but reduces staleness).
+  if (p.startsWith("/api/")) setShortCache(res, 10);
+  else setShortCache(res, 30);
+  return next();
+});
+
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 app.get("/api/site", (_req, res) => {
@@ -856,6 +898,11 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
       hotlink: z.object({
         enabled: z.boolean().default(false),
         allowedOrigins: z.array(z.string().min(1)).default([]),
+      }),
+    }),
+    cdn: z.object({
+      cloudflare: z.object({
+        cacheEnabled: z.boolean().default(false),
       }),
     }),
     images: z.object({

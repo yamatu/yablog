@@ -837,6 +837,12 @@ export type SiteSettings = {
       allowedOrigins: string[];
     };
   };
+  cdn: {
+    cloudflare: {
+      // When disabled, we emit `Cache-Control: no-store` for HTML + public GET APIs (helps when using "Cache Everything").
+      cacheEnabled: boolean;
+    };
+  };
   images: {
     homeHero: string;
     archiveHero: string;
@@ -961,6 +967,11 @@ export const defaultSiteSettings = (): SiteSettings => ({
       allowedOrigins: [],
     },
   },
+  cdn: {
+    cloudflare: {
+      cacheEnabled: false,
+    },
+  },
   images: {
     homeHero: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80",
     archiveHero: "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?auto=format&fit=crop&w=1920&q=80",
@@ -1027,6 +1038,11 @@ const mergeSiteSettings = (base: SiteSettings, incoming: any): SiteSettings => {
         allowedOrigins: Array.isArray(safe?.security?.hotlink?.allowedOrigins)
           ? safe.security.hotlink.allowedOrigins.map((v: any) => String(v)).filter(Boolean)
           : base.security.hotlink.allowedOrigins,
+      },
+    },
+    cdn: {
+      cloudflare: {
+        cacheEnabled: Boolean(safe?.cdn?.cloudflare?.cacheEnabled ?? base.cdn.cloudflare.cacheEnabled),
       },
     },
     images: {

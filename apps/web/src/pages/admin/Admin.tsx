@@ -195,7 +195,7 @@ function AdminDashboard({ user }: { user: User }) {
           <h2 style={{ margin: 0 }}>控制台</h2>
           <div className="muted">欢迎回来，{user.username}</div>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <button className="btn-primary" onClick={() => navigate("/admin/new")}>+ 新建文章</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/media")}>图库</button>
           <button className="btn-ghost" onClick={() => navigate("/admin/comments")}>评论</button>
@@ -1236,7 +1236,7 @@ export function AdminSettingsPage() {
               <div>
                 <div className="widget-title">防盗链</div>
                 <div style={{ display: "grid", gap: 12 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <input
                       type="checkbox"
                       checked={siteDraft.security.hotlink.enabled}
@@ -1271,6 +1271,29 @@ export function AdminSettingsPage() {
                     rows={4}
                   />
                   <div className="muted">不填写则仅允许本站域名引用；无 Referer 的请求默认放行。</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="widget-title">Cloudflare CDN 缓存</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <input
+                      type="checkbox"
+                      checked={siteDraft.cdn.cloudflare.cacheEnabled}
+                      onChange={(e) =>
+                        setSiteDraft({
+                          ...siteDraft,
+                          cdn: { ...siteDraft.cdn, cloudflare: { ...siteDraft.cdn.cloudflare, cacheEnabled: e.target.checked } },
+                        })
+                      }
+                      style={{ width: "auto" }}
+                    />
+                    <span>允许缓存（开启后可能导致新文章显示有延迟；若 Cloudflare 使用“Cache Everything”建议关闭）</span>
+                  </label>
+                  <div className="muted">
+                    关闭时：后端会对页面与公开 API 返回 <code>Cache-Control: no-store</code>，避免 Cloudflare 缓存导致内容不更新。
+                  </div>
                 </div>
               </div>
 
@@ -1828,7 +1851,7 @@ function AdminLinksPanel() {
               <input value={newLink.url} onChange={(e) => setNewLink({ ...newLink, url: e.target.value })} placeholder="URL（https://...）" />
               <input value={newLink.description} onChange={(e) => setNewLink({ ...newLink, description: e.target.value })} placeholder="描述（可选）" />
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <input value={newLink.iconUrl} onChange={(e) => setNewLink({ ...newLink, iconUrl: e.target.value })} placeholder="图标 URL（可选）" style={{ flex: 1, minWidth: 260 }} />
+                <input value={newLink.iconUrl} onChange={(e) => setNewLink({ ...newLink, iconUrl: e.target.value })} placeholder="图标 URL（可选）" style={{ flex: 1, minWidth: 0 }} />
                 <button
                   className="btn-ghost"
                   type="button"
@@ -1956,7 +1979,7 @@ function AdminLinksPanel() {
                   <div style={{ width: 36, height: 36, borderRadius: 10, overflow: "hidden", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {l.iconUrl ? <img src={l.iconUrl} alt="" style={{ width: 22, height: 22 }} /> : <span style={{ opacity: 0.7, fontWeight: 900 }}>{l.title.slice(0, 1)}</span>}
                   </div>
-                  <div style={{ flex: 1, minWidth: 260 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <input value={l.title} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, title: e.target.value } : x))} placeholder="标题" />
                   </div>
                   <div style={{ width: 120 }}>
@@ -1973,7 +1996,7 @@ function AdminLinksPanel() {
                 <input value={l.description} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, description: e.target.value } : x))} placeholder="描述（可选）" />
                 <div style={{ height: 10 }} />
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <input value={l.iconUrl} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, iconUrl: e.target.value } : x))} placeholder="图标 URL（可选）" style={{ flex: 1, minWidth: 260 }} />
+                  <input value={l.iconUrl} onChange={(e) => setLinks((arr) => arr.map((x) => x.id === l.id ? { ...x, iconUrl: e.target.value } : x))} placeholder="图标 URL（可选）" style={{ flex: 1, minWidth: 0 }} />
                   <button
                     className="btn-ghost"
                     type="button"
@@ -2437,13 +2460,13 @@ function AdminSecurityPanel() {
         <div className="muted">手动封禁（每行一个 IP）</div>
         <div style={{ height: 8 }} />
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
-          <textarea
-            value={manualIps}
-            onChange={(e) => setManualIps(e.target.value)}
-            placeholder={"例如：\n1.2.3.4\n2606:4700:4700::1111"}
-            rows={3}
-            style={{ flex: 1, minWidth: 320 }}
-          />
+	          <textarea
+	            value={manualIps}
+	            onChange={(e) => setManualIps(e.target.value)}
+	            placeholder={"例如：\n1.2.3.4\n2606:4700:4700::1111"}
+	            rows={3}
+	            style={{ flex: 1, minWidth: 0 }}
+	          />
           <button
             className="btn-danger"
             disabled={busy || !manualIps.trim()}
