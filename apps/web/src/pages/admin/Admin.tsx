@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { api, CommentAdminRow, IpBan, Link as FriendLink, LinkRequest, Post, SuspiciousIp, User } from "../../api";
+import { AiSettings, api, CommentAdminRow, IpBan, Link as FriendLink, LinkRequest, Post, SuspiciousIp, User } from "../../api";
 import { ImageField } from "../../components/ImageField";
 import { Markdown } from "../../components/Markdown";
 import { MediaLibraryPanel } from "../../components/MediaLibraryModal";
@@ -13,6 +13,7 @@ const NAV_ICON_OPTIONS = [
   { key: "archive", label: "Archive" },
   { key: "tag", label: "Tag" },
   { key: "category", label: "Category" },
+  { key: "ai", label: "AI" },
   { key: "info", label: "Info" },
   { key: "search", label: "Search" },
   { key: "link", label: "Link" },
@@ -23,6 +24,7 @@ const NAV_PATH_OPTIONS = [
   { path: "/archive", label: "归档 /archive" },
   { path: "/tags", label: "标签 /tags" },
   { path: "/categories", label: "分类 /categories" },
+  { path: "/ai", label: "AI /ai" },
   { path: "/links", label: "友链 /links" },
   { path: "/about", label: "关于 /about" },
 ];
@@ -650,6 +652,11 @@ export function AdminSettingsPage() {
   const [siteMsg, setSiteMsg] = useState<string | null>(null);
   const [siteErr, setSiteErr] = useState<string | null>(null);
 
+  const [aiDraft, setAiDraft] = useState<AiSettings | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -665,6 +672,22 @@ export function AdminSettingsPage() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await api.adminGetAi();
+        if (!alive) return;
+        setAiDraft(res.ai);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   if (loading) return <div>Loading...</div>;
@@ -773,6 +796,21 @@ export function AdminSettingsPage() {
       setSiteErr(e?.message ?? String(e));
     } finally {
       setSiteBusy(false);
+    }
+  };
+
+  const saveAi = async () => {
+    if (!aiDraft) return;
+    setAiErr(null);
+    setAiMsg(null);
+    setAiBusy(true);
+    try {
+      await api.adminUpdateAi(aiDraft);
+      setAiMsg("AI 设置已保存");
+    } catch (e: any) {
+      setAiErr(e?.message ?? String(e));
+    } finally {
+      setAiBusy(false);
     }
   };
 
@@ -1243,6 +1281,106 @@ export function AdminSettingsPage() {
                 {siteMsg ? <span style={{ color: "green" }}>{siteMsg}</span> : null}
                 {siteErr ? <span style={{ color: "red" }}>{siteErr}</span> : null}
               </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ height: 22 }} />
+        <div className="card adminSettingsCard" style={{ padding: 30 }}>
+          <div className="adminSectionTitle" style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>AI 对话</div>
+          {!aiDraft ? (
+            <div className="muted">加载 AI 设置中…</div>
+          ) : (
+            <div style={{ display: "grid", gap: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <input
+                  type="checkbox"
+                  checked={aiDraft.enabled}
+                  onChange={(e) => setAiDraft({ ...aiDraft, enabled: e.target.checked })}
+                  style={{ width: "auto" }}
+                />
+                <span>启用 AI 对话（/ai 页面）</span>
+              </label>
+
+              <div className="muted">模式（auto 会根据 apiBase/报错自动切换到 Codex CLI）</div>
+              <select value={aiDraft.mode} onChange={(e) => setAiDraft({ ...aiDraft, mode: e.target.value as any })}>
+                <option value="auto">auto</option>
+                <option value="http">http（直连 OpenAI/兼容接口）</option>
+                <option value="codex">codex（本机 codex exec）</option>
+              </select>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <input
+                  value={aiDraft.model}
+                  onChange={(e) => setAiDraft({ ...aiDraft, model: e.target.value })}
+                  placeholder="模型（例如 gpt-4o-mini）"
+                />
+                <input
+                  value={aiDraft.apiBase}
+                  onChange={(e) => setAiDraft({ ...aiDraft, apiBase: e.target.value })}
+                  placeholder="apiBase（例如 https://api.openai.com/v1 或你的兼容接口 /v1）"
+                />
+                <input
+                  type="password"
+                  value={aiDraft.apiKey}
+                  onChange={(e) => setAiDraft({ ...aiDraft, apiKey: e.target.value })}
+                  placeholder="apiKey（服务器端保存，仅后台可见）"
+                />
+                <input
+                  type="number"
+                  value={aiDraft.timeoutMs}
+                  onChange={(e) => setAiDraft({ ...aiDraft, timeoutMs: Number(e.target.value) || 60000 })}
+                  placeholder="超时（ms）"
+                />
+              </div>
+
+              <div className="muted">Codex CLI（可选：粘贴 config.toml / auth.json；不填则用自动生成的最小 config.toml）</div>
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div className="muted">codex config.toml</div>
+                  <textarea
+                    value={aiDraft.codex.configToml}
+                    onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, configToml: e.target.value } })}
+                    rows={8}
+                    placeholder={'[providers.openai]\nname="openai"\nbase_url="https://.../v1"\nenv_key="GPT_API_KEY"\nwire_api="responses"'}
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div className="muted">codex auth.json</div>
+                  <textarea
+                    value={aiDraft.codex.authJson}
+                    onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, authJson: e.target.value } })}
+                    rows={6}
+                    placeholder="{ ... }"
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+                  <input
+                    value={aiDraft.codex.envKey}
+                    onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, envKey: e.target.value } })}
+                    placeholder="env_key（默认 GPT_API_KEY）"
+                  />
+                  <select
+                    value={aiDraft.codex.wireApi}
+                    onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, wireApi: e.target.value as any } })}
+                    title="wire_api"
+                  >
+                    <option value="responses">responses</option>
+                    <option value="chat">chat</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="btn-primary" onClick={saveAi} disabled={aiBusy}>
+                  {aiBusy ? "保存中…" : "保存 AI 设置"}
+                </button>
+                {aiMsg ? <span style={{ color: "green" }}>{aiMsg}</span> : null}
+                {aiErr ? <span style={{ color: "red" }}>{aiErr}</span> : null}
+              </div>
+              <div className="muted">提示：使用 codex 模式需要服务器环境里存在 `codex` 命令（Codex CLI）。</div>
             </div>
           )}
         </div>

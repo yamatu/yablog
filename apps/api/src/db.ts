@@ -858,6 +858,79 @@ export type SiteSettings = {
   };
 };
 
+export type AiSettings = {
+  enabled: boolean;
+  // auto: decide based on apiBase/error; http: direct OpenAI-compatible; codex: spawn codex exec
+  mode: "auto" | "http" | "codex";
+  model: string;
+  apiBase: string;
+  apiKey: string;
+  timeoutMs: number;
+  codex: {
+    // Stored for convenience; we run codex in an isolated temp CODEX_HOME.
+    configToml: string;
+    authJson: string;
+    envKey: string;
+    wireApi: "responses" | "chat";
+  };
+};
+
+export const defaultAiSettings = (): AiSettings => ({
+  enabled: false,
+  mode: "auto",
+  model: "gpt-4o-mini",
+  apiBase: "https://api.openai.com/v1",
+  apiKey: "",
+  timeoutMs: 60_000,
+  codex: {
+    configToml: "",
+    authJson: "",
+    envKey: "GPT_API_KEY",
+    wireApi: "responses",
+  },
+});
+
+const mergeAiSettings = (base: AiSettings, incoming: any): AiSettings => {
+  const safe = typeof incoming === "object" && incoming ? incoming : {};
+  const mode = String(safe?.mode ?? base.mode);
+  const wireApi = String(safe?.codex?.wireApi ?? base.codex.wireApi);
+  return {
+    enabled: Boolean(safe?.enabled ?? base.enabled),
+    mode: mode === "http" || mode === "codex" || mode === "auto" ? (mode as AiSettings["mode"]) : base.mode,
+    model: String(safe?.model ?? base.model),
+    apiBase: String(safe?.apiBase ?? base.apiBase),
+    apiKey: String(safe?.apiKey ?? base.apiKey),
+    timeoutMs: Number.isFinite(Number(safe?.timeoutMs)) ? Math.max(5_000, Number(safe.timeoutMs)) : base.timeoutMs,
+    codex: {
+      configToml: String(safe?.codex?.configToml ?? base.codex.configToml),
+      authJson: String(safe?.codex?.authJson ?? base.codex.authJson),
+      envKey: String(safe?.codex?.envKey ?? base.codex.envKey),
+      wireApi: wireApi === "chat" || wireApi === "responses" ? (wireApi as AiSettings["codex"]["wireApi"]) : base.codex.wireApi,
+    },
+  };
+};
+
+export const getAiSettings = (db: Db): AiSettings => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get("ai_settings") as
+    | { value: string }
+    | undefined;
+  if (!row) return defaultAiSettings();
+  try {
+    const parsed = JSON.parse(row.value);
+    return mergeAiSettings(defaultAiSettings(), parsed);
+  } catch {
+    return defaultAiSettings();
+  }
+};
+
+export const setAiSettings = (db: Db, settings: AiSettings) => {
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+    "ai_settings",
+    JSON.stringify(settings),
+    nowIso(),
+  );
+};
+
 export const defaultSiteSettings = (): SiteSettings => ({
   nav: {
     brandText: "YaBlog",
@@ -865,6 +938,7 @@ export const defaultSiteSettings = (): SiteSettings => ({
       { label: "首页", path: "/", icon: "home" },
       { label: "归档", path: "/archive", icon: "archive" },
       { label: "标签", path: "/tags", icon: "tag" },
+      { label: "AI", path: "/ai", icon: "ai" },
       { label: "友链", path: "/links", icon: "link" },
       { label: "关于", path: "/about", icon: "info" },
     ],

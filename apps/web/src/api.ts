@@ -65,6 +65,26 @@ export type IpBan = {
   createdAt: string;
 };
 
+export type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export type AiSettings = {
+  enabled: boolean;
+  mode: "auto" | "http" | "codex";
+  model: string;
+  apiBase: string;
+  apiKey: string;
+  timeoutMs: number;
+  codex: {
+    configToml: string;
+    authJson: string;
+    envKey: string;
+    wireApi: "responses" | "chat";
+  };
+};
+
 export type SiteSettings = {
   nav: {
     brandText: string;
@@ -232,6 +252,12 @@ export const api = {
 
   site: () => json<{ site: SiteSettings }>("/api/site"),
   about: () => json<{ about: SiteSettings["about"]; heroImage: string }>("/api/about"),
+  chat: (args: { messages: ChatMessage[] }) =>
+    json<{ assistant: string }>("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(args),
+    }),
 
   adminListPosts: (args: { page?: number; limit?: number; q?: string; status?: string }) => {
     const url = new URL("/api/admin/posts", window.location.origin);
@@ -294,6 +320,14 @@ export const api = {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ site }),
+    }),
+
+  adminGetAi: () => json<{ ai: AiSettings }>("/api/admin/ai"),
+  adminUpdateAi: (ai: AiSettings) =>
+    json<{ ok: true }>("/api/admin/ai", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ai }),
     }),
 
   adminUploadImage: (file: File, opts?: { replace?: string }) => {

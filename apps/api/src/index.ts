@@ -2,6 +2,7 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import helmet from "helmet";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -17,10 +18,12 @@ import { authenticateUser, hashPassword, loginSchema, signToken, verifyPassword 
 import { createCache } from "./cache.js";
 import { config } from "./config.js";
 import {
+  defaultAiSettings,
   defaultSiteSettings,
   deleteIpBan,
   ensureAdminUser,
   getFirstUser,
+  getAiSettings,
   getSiteSettings,
   getUserById,
   hasAnyUsers,
@@ -28,6 +31,7 @@ import {
   listIpBans,
   migrateDb,
   openDb,
+  setAiSettings,
   setSiteSettings,
   upsertIpBan,
   updateUserCredentials,
@@ -57,10 +61,22 @@ try {
   setSiteSettings(db, defaultSiteSettings());
 }
 
+// Ensure a default AI settings row exists (admin-only secrets).
+try {
+  const current = getAiSettings(db);
+  const exists = db.prepare("SELECT 1 as ok FROM settings WHERE key = ? LIMIT 1").get("ai_settings") as
+    | { ok: 1 }
+    | undefined;
+  if (!exists) setAiSettings(db, current ?? defaultAiSettings());
+} catch {
+  setAiSettings(db, defaultAiSettings());
+}
+
 let isRestoring = false;
 let isBackingUp = false;
 
 let siteCache = getSiteSettings(db);
+let aiCache = getAiSettings(db);
 
 const ipKey = (ip: string | undefined | null) => (ip ?? "").replace("::ffff:", "") || "unknown";
 let bannedIpSet = new Set<string>();
@@ -81,6 +97,83 @@ const sha256File = async (filePath: string) => {
   const stream = fs.createReadStream(filePath);
   for await (const chunk of stream) hash.update(chunk as Buffer);
   return hash.digest("hex");
+};
+
+const normalizeApiBase = (raw: string) => {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const noSlash = s.replace(/\/+$/, "");
+  // Common mis-config: .../v1/codex -> .../v1
+  return noSlash.replace(/\/v1\/codex$/i, "/v1");
+};
+
+const isCodexOnlyHost = (apiBase: string) => {
+  const s = apiBase.toLowerCase();
+  return s.includes("codex-api.packycode.com");
+};
+
+const withTimeout = async <T,>(p: Promise<T>, ms: number, onTimeout?: () => void): Promise<T> => {
+  let t: NodeJS.Timeout | null = null;
+  const timeout = new Promise<never>((_r, rej) => {
+    t = setTimeout(() => {
+      try {
+        onTimeout?.();
+      } finally {
+        rej(new Error("timeout"));
+      }
+    }, ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    if (t) clearTimeout(t);
+  }
+};
+
+const fetchJSON = async (url: string, args: { apiKey: string; body: any; timeoutMs: number }) => {
+  const ctrl = new AbortController();
+  const { apiKey, body, timeoutMs } = args;
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+
+  const doFetch = async () => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { res, text, json };
+  };
+
+  try {
+    return await withTimeout(doFetch(), timeoutMs, () => ctrl.abort());
+  } catch (e) {
+    ctrl.abort();
+    throw e;
+  }
+};
+
+const messagesToPrompt = (messages: { role: string; content: string }[]) => {
+  const guard =
+    "You are a helpful assistant. Do not execute commands, do not read/write files, do not access network. Only answer the user's last question with plain text.";
+  const lines = [guard, ""];
+  for (const m of messages) {
+    const role = String(m.role ?? "").toUpperCase();
+    const content = String(m.content ?? "");
+    lines.push(`${role}: ${content}`);
+  }
+  lines.push("", "ASSISTANT:");
+  return lines.join("\n");
 };
 
 const listFilesRecursive = (rootDir: string) => {
@@ -240,6 +333,224 @@ app.get("/api/site", (_req, res) => {
 
 app.get("/api/about", (_req, res) => {
   res.json({ about: siteCache.about, heroImage: siteCache.images.aboutHero });
+});
+
+app.post("/api/chat", async (req, res) => {
+  if (!aiCache.enabled) return res.status(503).json({ error: "ai_disabled" });
+
+  const body = z
+    .object({
+      messages: z
+        .array(
+          z.object({
+            role: z.enum(["system", "user", "assistant"]),
+            content: z.string().min(1).max(4000),
+          }),
+        )
+        .min(1)
+        .max(40),
+    })
+    .parse(req.body);
+
+  const messages = [...body.messages];
+  if (messages[0]?.role !== "system") {
+    messages.unshift({
+      role: "system",
+      content:
+        "You are a helpful assistant. Do not execute commands, do not read/write files, do not access network. Only answer with plain text.",
+    });
+    if (messages.length > 40) messages.length = 40;
+  }
+
+  const ip = ipKey(req.ip);
+  const [rlIp, rlGlobal] = await Promise.all([
+    cache.rateLimit({ bucket: "chat", key: ip, limit: 20, windowSec: 60 }),
+    cache.rateLimit({ bucket: "chat:g", key: "global", limit: 250, windowSec: 60 }),
+  ]);
+
+  if (!rlIp.allowed || !rlGlobal.allowed) {
+    void cache.recordSuspicious({ ip, bucket: "chat", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+    res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
+    return res.status(429).json({ error: "rate_limited" });
+  }
+
+  const settings = aiCache;
+  const apiBase = normalizeApiBase(settings.apiBase);
+  if (!apiBase) return res.status(400).json({ error: "ai_not_configured" });
+  const model = (settings.model || "gpt-4o-mini").trim();
+  const timeoutMs = Math.min(5 * 60_000, Math.max(5_000, settings.timeoutMs || 60_000));
+
+  const tryHttp = async () => {
+    const urlResponses = `${apiBase}/responses`;
+    const payload = {
+      model,
+      input: messages,
+      max_output_tokens: 800,
+    };
+
+    const r1 = await fetchJSON(urlResponses, { apiKey: settings.apiKey, body: payload, timeoutMs });
+    if (r1.res.ok && r1.json) {
+      const j = r1.json as any;
+      const outputText =
+        typeof j.output_text === "string"
+          ? j.output_text
+          : Array.isArray(j.output)
+            ? j.output
+                .flatMap((it: any) =>
+                  Array.isArray(it?.content)
+                    ? it.content.map((c: any) => (typeof c?.text === "string" ? c.text : "")).filter(Boolean)
+                    : [],
+                )
+                .join("")
+            : "";
+      if (outputText) return outputText;
+    }
+
+    // Fallback for OpenAI-compatible servers without /responses
+    if (r1.res.status === 404 || r1.res.status === 405) {
+      const urlChat = `${apiBase}/chat/completions`;
+      const r2 = await fetchJSON(urlChat, {
+        apiKey: settings.apiKey,
+        timeoutMs,
+        body: { model, messages, max_tokens: 800 },
+      });
+      if (r2.res.ok && r2.json) {
+        const content = (r2.json as any)?.choices?.[0]?.message?.content;
+        if (typeof content === "string" && content.trim()) return content;
+      }
+      throw new Error(r2.json?.error?.message || r2.text || `HTTP ${r2.res.status}`);
+    }
+
+    // Some endpoints respond 400 with a "Codex CLI only" hint.
+    const hint = (r1.json?.error?.message || r1.text || "").toLowerCase();
+    if (hint.includes("official codex cli") || hint.includes("only accessible via the official codex cli")) {
+      const e: any = new Error("codex_cli_only");
+      e.code = "CODEX_CLI_ONLY";
+      throw e;
+    }
+
+    throw new Error(r1.json?.error?.message || r1.text || `HTTP ${r1.res.status}`);
+  };
+
+  const runCodex = async () => {
+    const prompt = messagesToPrompt(messages);
+
+    const tmpWork = fs.mkdtempSync(path.join(os.tmpdir(), "yablog_codex_work_"));
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "yablog_codex_home_"));
+    const tmpOut = path.join(tmpHome, "last_message.txt");
+    const tmpCfg = path.join(tmpHome, "config.toml");
+    const tmpAuth = path.join(tmpHome, "auth.json");
+
+    const cfgText =
+      settings.codex.configToml.trim() ||
+      [
+        "[providers.openai]",
+        'name="openai"',
+        `base_url="${apiBase.replaceAll('"', '\\"')}"`,
+        `env_key="${settings.codex.envKey.replaceAll('"', '\\"')}"`,
+        `wire_api="${settings.codex.wireApi}"`,
+        "",
+      ].join("\n");
+    fs.writeFileSync(tmpCfg, cfgText, "utf8");
+    if (settings.codex.authJson.trim()) fs.writeFileSync(tmpAuth, settings.codex.authJson, "utf8");
+
+    const baseEnv = {
+      ...process.env,
+      CODEX_HOME: tmpHome,
+      OPENAI_API_KEY: settings.apiKey,
+      OPENAI_BASE_URL: apiBase,
+      OPENAI_API_BASE: apiBase,
+      GPT_API_KEY: settings.apiKey,
+      [settings.codex.envKey]: settings.apiKey,
+    } as Record<string, string>;
+
+    const runOnce = async (args: string[], useStdin: boolean) => {
+      return await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
+        const child = spawn("codex", args, {
+          cwd: tmpWork,
+          env: baseEnv,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (d) => (stdout += String(d)));
+        child.stderr.on("data", (d) => (stderr += String(d)));
+        if (useStdin) {
+          child.stdin.write(prompt);
+          child.stdin.end();
+        } else {
+          child.stdin.end();
+        }
+        const kill = () => child.kill("SIGKILL");
+        withTimeout(
+          new Promise<void>((r) => child.on("close", () => r())),
+          timeoutMs,
+          kill,
+        )
+          .then(() => resolve({ code: child.exitCode, stdout, stderr }))
+          .catch(() => resolve({ code: child.exitCode, stdout, stderr: stderr + "\n(timeout)" }));
+      });
+    };
+
+    try {
+      // Prefer file output, but keep stdout as fallback.
+      const baseArgs = [
+        "exec",
+        "--ask-for-approval",
+        "never",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+        "--config",
+        tmpCfg,
+      ];
+
+      // Attempt: read prompt from stdin via "-" placeholder.
+      let r = await runOnce([...baseArgs, "--output-last-message", tmpOut, "-"], true);
+      if (r.code !== 0 && /unknown option|unrecognized option/i.test(r.stderr)) {
+        r = await runOnce([...baseArgs, "-"], true);
+      }
+      if (r.code !== 0 && /usage|expected|invalid/i.test(r.stderr) && prompt.length < 7000) {
+        // Some versions don't support stdin; last-resort pass as argv (bounded).
+        r = await runOnce([...baseArgs, "--output-last-message", tmpOut, prompt], false);
+      }
+
+      if (fs.existsSync(tmpOut)) {
+        const last = fs.readFileSync(tmpOut, "utf8").trim();
+        if (last) return last;
+      }
+      const out = (r.stdout || r.stderr || "").trim();
+      if (!out) throw new Error("codex_no_output");
+      return out;
+    } finally {
+      fs.rmSync(tmpWork, { recursive: true, force: true });
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+    }
+  };
+
+  try {
+    const mode = settings.mode;
+    const shouldCodex = mode === "codex" || (mode === "auto" && isCodexOnlyHost(apiBase));
+    let assistant = "";
+    if (shouldCodex) {
+      assistant = await runCodex();
+    } else {
+      try {
+        assistant = await tryHttp();
+      } catch (e: any) {
+        if (mode === "auto" && (e?.code === "CODEX_CLI_ONLY" || String(e?.message ?? "").includes("codex_cli_only"))) {
+          assistant = await runCodex();
+        } else {
+          throw e;
+        }
+      }
+    }
+    res.json({ assistant });
+  } catch (e: any) {
+    const raw = e?.message ?? String(e);
+    // Avoid leaking upstream details in JSON; keep a short error.
+    res.status(500).json({ error: "chat_failed", message: raw.slice(0, 300) });
+  }
 });
 
 app.post("/api/auth/login", async (req, res) => {
@@ -527,6 +838,34 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
   const body = z.object({ site: siteSchema }).parse(req.body);
   setSiteSettings(db, body.site);
   siteCache = body.site;
+  res.json({ ok: true });
+});
+
+adminRouter.get("/ai", (_req, res) => {
+  res.json({ ai: aiCache });
+});
+
+adminRouter.put("/ai", (req: AuthedRequest, res) => {
+  const aiSchema = z.object({
+    enabled: z.boolean().default(false),
+    mode: z.enum(["auto", "http", "codex"]).default("auto"),
+    model: z.string().min(1).max(80).default("gpt-4o-mini"),
+    apiBase: z.string().min(1).max(2000).default("https://api.openai.com/v1"),
+    apiKey: z.string().max(8000).default(""),
+    timeoutMs: z.number().int().min(5000).max(300000).default(60000),
+    codex: z
+      .object({
+        configToml: z.string().max(200000).default(""),
+        authJson: z.string().max(200000).default(""),
+        envKey: z.string().min(1).max(60).default("GPT_API_KEY"),
+        wireApi: z.enum(["responses", "chat"]).default("responses"),
+      })
+      .default({}),
+  });
+
+  const body = z.object({ ai: aiSchema }).parse(req.body);
+  setAiSettings(db, body.ai);
+  aiCache = body.ai;
   res.json({ ok: true });
 });
 

@@ -14,6 +14,7 @@ import {
 import { HomePage } from "./pages/Home";
 import { PostPage } from "./pages/Post";
 import { LinksPage } from "./pages/Links";
+import { AiPage } from "./pages/Ai";
 import {
   AdminCommentsPage,
   AdminEditorPage,
@@ -41,6 +42,7 @@ export function App() {
             <Route path="/category/:category" element={<CategoryPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/links" element={<LinksPage />} />
+            <Route path="/ai" element={<AiPage />} />
 
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route path="/admin" element={<AdminIndexPage />} />

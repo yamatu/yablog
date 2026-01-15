@@ -9,6 +9,7 @@ import {
   MdLabel,
   MdLightMode,
   MdLink,
+  MdSmartToy,
   MdMenu,
   MdClose,
   MdSearch,
@@ -86,11 +87,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     if (k === "category" || k === "categories") return <MdFolder />;
     if (k === "info" || k === "about") return <MdInfo />;
     if (k === "search") return <MdSearch />;
+    if (k === "ai" || k === "robot" || k === "smart_toy") return <MdSmartToy />;
     return <MdLink />;
   };
 
   const brandText = site?.nav?.brandText?.trim() || "YaBlog";
-  const navLinks =
+  const baseLinks =
     site?.nav?.links?.length
       ? site.nav.links
       : [
@@ -100,6 +102,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { label: "友链", path: "/links", icon: "link" },
           { label: "关于", path: "/about", icon: "info" },
         ];
+  const navLinks = baseLinks.some((l) => l.path === "/ai") ? baseLinks : [...baseLinks, { label: "AI", path: "/ai", icon: "ai" }];
   const footerText =
     (site?.footer?.text?.trim() || "© {year} YaBlog · Designed with Butterfly Style").replaceAll(
       "{year}",
