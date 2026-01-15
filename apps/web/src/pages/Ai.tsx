@@ -187,7 +187,7 @@ export function AiPage() {
     <div className="aiPage">
       <div className="aiHero">
         <div className="aiHeroInner container">
-          <div className="aiHeroTitle">AI 对话</div>
+          <div className="aiHeroTitle">GPT_5.2</div>
           <div className="aiHeroSub">支持 Markdown · LaTeX · 代码块</div>
         </div>
       </div>
