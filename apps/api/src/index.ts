@@ -475,6 +475,14 @@ app.post("/api/chat", async (req, res) => {
         let stderr = "";
         child.stdout.on("data", (d) => (stdout += String(d)));
         child.stderr.on("data", (d) => (stderr += String(d)));
+        // If codex binary is missing inside the runtime (common in Docker), don't crash the whole server.
+        child.on("error", (err) => {
+          resolve({
+            code: 127,
+            stdout,
+            stderr: `${stderr}\n${String((err as any)?.message ?? err)}`.trim(),
+          });
+        });
         if (useStdin) {
           child.stdin.write(prompt);
           child.stdin.end();
@@ -518,6 +526,9 @@ app.post("/api/chat", async (req, res) => {
       if (fs.existsSync(tmpOut)) {
         const last = fs.readFileSync(tmpOut, "utf8").trim();
         if (last) return last;
+      }
+      if (/ENOENT|not found/i.test(r.stderr) || r.code === 127) {
+        throw new Error("codex_not_found: codex CLI is not available in this server/runtime");
       }
       const out = (r.stdout || r.stderr || "").trim();
       if (!out) throw new Error("codex_no_output");
