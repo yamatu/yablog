@@ -374,11 +374,21 @@ app.post("/api/chat", async (req, res) => {
     return res.status(429).json({ error: "rate_limited" });
   }
 
+  const defaults = defaultAiSettings();
   const settings = aiCache;
-  const apiBase = normalizeApiBase(settings.apiBase);
-  if (!apiBase) return res.status(400).json({ error: "ai_not_configured" });
-  const model = (settings.model || "gpt-4o-mini").trim();
-  const timeoutMs = Math.min(5 * 60_000, Math.max(5_000, settings.timeoutMs || 60_000));
+
+  const cfgToml = (settings.codex?.configToml ?? "").trim();
+  const model = (settings.model || defaults.model).trim() || defaults.model;
+  const apiBaseRaw = String(settings.apiBase ?? "").trim();
+  const apiBase = normalizeApiBase(apiBaseRaw || (cfgToml ? "" : defaults.apiBase));
+  const timeoutMs = Math.min(5 * 60_000, Math.max(5_000, settings.timeoutMs || defaults.timeoutMs));
+  const envKey = (settings.codex?.envKey || defaults.codex.envKey).trim() || defaults.codex.envKey;
+  const wireApi = (settings.codex?.wireApi ?? defaults.codex.wireApi) as "responses" | "chat";
+
+  const mode = settings.mode || defaults.mode;
+  const shouldCodex = mode === "codex" || (mode === "auto" && (isCodexOnlyHost(apiBase) || Boolean(cfgToml)));
+  if (!apiBase && !shouldCodex) return res.status(400).json({ error: "ai_not_configured" });
+  if (!apiBase && shouldCodex && !cfgToml) return res.status(400).json({ error: "ai_not_configured" });
 
   const tryHttp = async () => {
     const urlResponses = `${apiBase}/responses`;
@@ -442,27 +452,32 @@ app.post("/api/chat", async (req, res) => {
     const tmpAuth = path.join(tmpHome, "auth.json");
 
     const cfgText =
-      settings.codex.configToml.trim() ||
+      cfgToml ||
       [
         "[providers.openai]",
         'name="openai"',
         `base_url="${apiBase.replaceAll('"', '\\"')}"`,
-        `env_key="${settings.codex.envKey.replaceAll('"', '\\"')}"`,
-        `wire_api="${settings.codex.wireApi}"`,
+        `env_key="${envKey.replaceAll('"', '\\"')}"`,
+        `wire_api="${wireApi}"`,
         "",
       ].join("\n");
     fs.writeFileSync(tmpCfg, cfgText, "utf8");
-    if (settings.codex.authJson.trim()) fs.writeFileSync(tmpAuth, settings.codex.authJson, "utf8");
+    if ((settings.codex?.authJson ?? "").trim()) fs.writeFileSync(tmpAuth, settings.codex!.authJson, "utf8");
 
-    const baseEnv = {
-      ...process.env,
-      CODEX_HOME: tmpHome,
-      OPENAI_API_KEY: settings.apiKey,
-      OPENAI_BASE_URL: apiBase,
-      OPENAI_API_BASE: apiBase,
-      GPT_API_KEY: settings.apiKey,
-      [settings.codex.envKey]: settings.apiKey,
-    } as Record<string, string>;
+    const baseEnv = { ...process.env, CODEX_HOME: tmpHome } as Record<string, string>;
+    if (settings.apiKey) {
+      baseEnv.OPENAI_API_KEY = settings.apiKey;
+      if (apiBase) {
+        baseEnv.OPENAI_BASE_URL = apiBase;
+        baseEnv.OPENAI_API_BASE = apiBase;
+      }
+      baseEnv.GPT_API_KEY = settings.apiKey;
+      baseEnv[envKey] = settings.apiKey;
+    } else if (apiBase) {
+      // Keep base_url hints (some setups still use auth.json).
+      baseEnv.OPENAI_BASE_URL = apiBase;
+      baseEnv.OPENAI_API_BASE = apiBase;
+    }
 
     const runOnce = async (args: string[], useStdin: boolean) => {
       return await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
@@ -540,8 +555,6 @@ app.post("/api/chat", async (req, res) => {
   };
 
   try {
-    const mode = settings.mode;
-    const shouldCodex = mode === "codex" || (mode === "auto" && isCodexOnlyHost(apiBase));
     let assistant = "";
     if (shouldCodex) {
       assistant = await runCodex();
@@ -860,15 +873,16 @@ adminRouter.put("/ai", (req: AuthedRequest, res) => {
   const aiSchema = z.object({
     enabled: z.boolean().default(false),
     mode: z.enum(["auto", "http", "codex"]).default("auto"),
-    model: z.string().min(1).max(80).default("gpt-4o-mini"),
-    apiBase: z.string().min(1).max(2000).default("https://api.openai.com/v1"),
+    // Allow blanks; server will fall back to defaults at runtime (esp. for codex-only setups).
+    model: z.string().max(80).default(""),
+    apiBase: z.string().max(2000).default(""),
     apiKey: z.string().max(8000).default(""),
     timeoutMs: z.number().int().min(5000).max(300000).default(60000),
     codex: z
       .object({
         configToml: z.string().max(200000).default(""),
         authJson: z.string().max(200000).default(""),
-        envKey: z.string().min(1).max(60).default("GPT_API_KEY"),
+        envKey: z.string().max(60).default(""),
         wireApi: z.enum(["responses", "chat"]).default("responses"),
       })
       .default({}),
@@ -879,6 +893,7 @@ adminRouter.put("/ai", (req: AuthedRequest, res) => {
   aiCache = body.ai;
   res.json({ ok: true });
 });
+
 
 const upload = multer({
   dest: path.join(os.tmpdir(), "yablog_uploads"),
@@ -1261,6 +1276,14 @@ if (config.webDistPath && fs.existsSync(config.webDistPath)) {
     return res.sendFile(indexHtml);
   });
 }
+
+// Zod validation errors should be 400 JSON (avoid Express default HTML 500).
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err?.name === "ZodError" && Array.isArray(err?.issues)) {
+    return res.status(400).json({ error: "invalid_request", issues: err.issues });
+  }
+  return next(err);
+});
 
 server = app.listen(config.port, () => {
   // eslint-disable-next-line no-console
