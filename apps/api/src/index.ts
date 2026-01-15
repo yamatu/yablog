@@ -48,6 +48,9 @@ migrateDb(db);
 
 const uploadsDir = path.join(path.dirname(config.databasePath), "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
+// Codex CLI needs a stable CODEX_HOME (it refuses to create helper binaries under /tmp).
+const codexHomeDir = path.join(path.dirname(config.databasePath), "codex_home");
+fs.mkdirSync(codexHomeDir, { recursive: true });
 
 // Ensure a default site settings row exists
 try {
@@ -446,11 +449,11 @@ app.post("/api/chat", async (req, res) => {
     const prompt = messagesToPrompt(messages);
 
     const tmpWork = fs.mkdtempSync(path.join(os.tmpdir(), "yablog_codex_work_"));
-    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "yablog_codex_home_"));
-    const tmpOut = path.join(tmpHome, "last_message.txt");
-    const tmpCfg = path.join(tmpHome, "config.toml");
-    const tmpAuth = path.join(tmpHome, "auth.json");
+    const tmpOut = path.join(tmpWork, "last_message.txt");
 
+    // Codex loads config/auth from CODEX_HOME/config.toml and CODEX_HOME/auth.json.
+    const cfgPath = path.join(codexHomeDir, "config.toml");
+    const authPath = path.join(codexHomeDir, "auth.json");
     const cfgText =
       cfgToml ||
       [
@@ -461,10 +464,10 @@ app.post("/api/chat", async (req, res) => {
         `wire_api="${wireApi}"`,
         "",
       ].join("\n");
-    fs.writeFileSync(tmpCfg, cfgText, "utf8");
-    if ((settings.codex?.authJson ?? "").trim()) fs.writeFileSync(tmpAuth, settings.codex!.authJson, "utf8");
+    fs.writeFileSync(cfgPath, cfgText, "utf8");
+    if ((settings.codex?.authJson ?? "").trim()) fs.writeFileSync(authPath, settings.codex!.authJson, "utf8");
 
-    const baseEnv = { ...process.env, CODEX_HOME: tmpHome } as Record<string, string>;
+    const baseEnv = { ...process.env, CODEX_HOME: codexHomeDir } as Record<string, string>;
     if (settings.apiKey) {
       baseEnv.OPENAI_API_KEY = settings.apiKey;
       if (apiBase) {
@@ -516,41 +519,60 @@ app.post("/api/chat", async (req, res) => {
     };
 
     try {
-      // Prefer file output, but keep stdout as fallback.
-      const baseArgs = [
-        "exec",
-        "--ask-for-approval",
-        "never",
-        "--sandbox",
-        "read-only",
-        "--skip-git-repo-check",
-        "--config",
-        tmpCfg,
-      ];
+      // Global flags must go before `exec` (exec doesn't accept --ask-for-approval).
+      // Prefer file output, with stdin prompt via "-" placeholder.
+      let r = await runOnce(
+        [
+          "--ask-for-approval",
+          "never",
+          "--sandbox",
+          "read-only",
+          "exec",
+          "-C",
+          tmpWork,
+          "--skip-git-repo-check",
+          "--output-last-message",
+          tmpOut,
+          "-",
+        ],
+        true,
+      );
 
-      // Attempt: read prompt from stdin via "-" placeholder.
-      let r = await runOnce([...baseArgs, "--output-last-message", tmpOut, "-"], true);
+      // Compatibility: older builds might not support --output-last-message.
       if (r.code !== 0 && /unknown option|unrecognized option/i.test(r.stderr)) {
-        r = await runOnce([...baseArgs, "-"], true);
-      }
-      if (r.code !== 0 && /usage|expected|invalid/i.test(r.stderr) && prompt.length < 7000) {
-        // Some versions don't support stdin; last-resort pass as argv (bounded).
-        r = await runOnce([...baseArgs, "--output-last-message", tmpOut, prompt], false);
+        r = await runOnce(
+          [
+            "--ask-for-approval",
+            "never",
+            "--sandbox",
+            "read-only",
+            "exec",
+            "-C",
+            tmpWork,
+            "--skip-git-repo-check",
+            "-",
+          ],
+          true,
+        );
       }
 
       if (fs.existsSync(tmpOut)) {
         const last = fs.readFileSync(tmpOut, "utf8").trim();
         if (last) return last;
       }
+
       if (/ENOENT|not found/i.test(r.stderr) || r.code === 127) {
         throw new Error("codex_not_found: codex CLI is not available in this server/runtime");
+      }
+      if ((r.code ?? 0) !== 0) {
+        const detail = (r.stderr || r.stdout || "").trim().slice(0, 2000);
+        throw new Error(`codex_failed: ${detail || "non_zero_exit"}`);
       }
       const out = (r.stdout || r.stderr || "").trim();
       if (!out) throw new Error("codex_no_output");
       return out;
     } finally {
       fs.rmSync(tmpWork, { recursive: true, force: true });
-      fs.rmSync(tmpHome, { recursive: true, force: true });
     }
   };
 
