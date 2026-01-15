@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Switch from "@radix-ui/react-switch";
 import * as Tabs from "@radix-ui/react-tabs";
-import { MdAdd, MdCheck, MdClearAll, MdDelete, MdEdit, MdExpandMore, MdSave } from "react-icons/md";
+import { MdAdd, MdCheck, MdClearAll, MdContentCopy, MdDelete, MdDone, MdEdit, MdExpandMore, MdSave } from "react-icons/md";
 
 import { api, ChatMessage } from "../api";
 import { Markdown } from "../components/Markdown";
@@ -71,6 +71,7 @@ export function AiPage() {
   const [composerTab, setComposerTab] = useState<"edit" | "preview">("edit");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const active = useMemo(() => index.items.find((m) => m.id === index.activeId) ?? index.items[0], [index]);
@@ -175,6 +176,16 @@ export function AiPage() {
       setErr(raw.includes("ai_disabled") ? "AI 功能未启用或未配置（请到后台设置开启）。" : raw);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const copyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((v) => (v === key ? null : v)), 1200);
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
     }
   };
 
@@ -330,6 +341,19 @@ export function AiPage() {
                   <div className="markdown aiMarkdown" style={{ padding: 0, background: "transparent", border: 0 }}>
                     <Markdown value={m.content} />
                   </div>
+                  {m.role === "assistant" ? (
+                    <div className="aiBubbleActions">
+                      <button
+                        className="btn-ghost aiCopyBtn"
+                        type="button"
+                        onClick={() => copyText(`msg:${idx}`, m.content)}
+                        title="复制原始内容（Markdown/LaTeX/代码）"
+                      >
+                        {copiedKey === `msg:${idx}` ? <MdDone /> : <MdContentCopy />}
+                        {copiedKey === `msg:${idx}` ? "已复制" : "复制"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}

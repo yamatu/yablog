@@ -1606,6 +1606,21 @@ button:hover,
   border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
 }
 
+.aiBubbleActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed color-mix(in oklab, var(--border) 70%, transparent);
+  margin-top: 12px;
+}
+
+.aiCopyBtn {
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
 .aiComposer {
   padding: 12px 14px 14px;
   border-top: 1px solid var(--border);
