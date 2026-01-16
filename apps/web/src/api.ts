@@ -170,6 +170,62 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
   return res.json() as Promise<T>;
 }
 
+function parseApiError(payload: any, status: number) {
+  const err = typeof payload?.error === "string" ? payload.error : null;
+  if (err === "invalid_credentials") return new Error("用户名或密码错误");
+  if (err === "invalid_captcha") return new Error("验证码错误或已过期");
+  if (err === "blocked_host") return new Error("该站点地址不允许访问（安全限制）");
+  if (err === "invalid_url") return new Error("URL 不合法");
+  if (err === "rate_limited") return new Error("请求过于频繁，请稍后再试");
+  if (err === "ip_banned") return new Error("你的 IP 已被封禁");
+  if (err) return new Error(err);
+  return new Error(`HTTP ${status}`);
+}
+
+async function xhrJson<T>(
+  url: string,
+  opts: {
+    method: "POST" | "PUT" | "PATCH" | "DELETE";
+    body?: Document | XMLHttpRequestBodyInit | null;
+    headers?: Record<string, string>;
+    onProgress?: (p: { loaded: number; total: number; percent: number }) => void;
+  },
+): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(opts.method, url, true);
+    xhr.withCredentials = true;
+    for (const [k, v] of Object.entries(opts.headers ?? {})) xhr.setRequestHeader(k, v);
+    if (opts.onProgress) {
+      xhr.upload.onprogress = (ev) => {
+        const total = Number(ev.total || 0);
+        const loaded = Number(ev.loaded || 0);
+        const percent = total > 0 ? Math.max(0, Math.min(100, Math.round((loaded / total) * 100))) : 0;
+        opts.onProgress?.({ loaded, total, percent });
+      };
+    }
+    xhr.onerror = () => reject(new Error("网络错误"));
+    xhr.ontimeout = () => reject(new Error("请求超时"));
+    xhr.onload = () => {
+      const status = xhr.status || 0;
+      const raw = xhr.responseText ?? "";
+      let payload: any = null;
+      try {
+        payload = raw ? JSON.parse(raw) : null;
+      } catch {
+        payload = null;
+      }
+      if (status >= 200 && status < 300) {
+        resolve(payload as T);
+        return;
+      }
+      if (payload) reject(parseApiError(payload, status));
+      else reject(new Error(raw || `HTTP ${status}`));
+    };
+    xhr.send(opts.body ?? null);
+  });
+}
+
 export const api = {
   health: () => json<{ ok: true }>("/api/health"),
 
@@ -335,23 +391,21 @@ export const api = {
       body: JSON.stringify({ ai }),
     }),
 
-  adminUploadImage: (file: File, opts?: { replace?: string }) => {
+  adminUploadImage: (file: File, opts?: { replace?: string; onProgress?: (p: { loaded: number; total: number; percent: number }) => void }) => {
     const fd = new FormData();
     fd.append("file", file);
     const url = new URL("/api/admin/upload", window.location.origin);
     if (opts?.replace) url.searchParams.set("replace", opts.replace);
-    return json<{ ok: true; url: string }>(url, {
-      method: "POST",
-      body: fd,
-    });
+    return xhrJson<{ ok: true; url: string }>(url.toString(), { method: "POST", body: fd, onProgress: opts?.onProgress });
   },
 
-  adminUploadImages: (files: File[]) => {
+  adminUploadImages: (files: File[], opts?: { onProgress?: (p: { loaded: number; total: number; percent: number }) => void }) => {
     const fd = new FormData();
     for (const f of files) fd.append("files", f);
-    return json<{ ok: true; urls: string[]; failed: { name: string; error: string }[] }>(`/api/admin/upload/batch`, {
+    return xhrJson<{ ok: true; urls: string[]; failed: { name: string; error: string }[] }>(`/api/admin/upload/batch`, {
       method: "POST",
       body: fd,
+      onProgress: opts?.onProgress,
     });
   },
 

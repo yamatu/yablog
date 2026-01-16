@@ -50,6 +50,7 @@ export function MediaLibraryPanel({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [uploadMsg, setUploadMsg] = useState<string>("");
   const [dragOver, setDragOver] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
 
   const refresh = async () => {
     setErr(null);
@@ -62,12 +63,13 @@ export function MediaLibraryPanel({
     if (!imgs.length) return;
     setErr(null);
     setBusy(true);
+    setUploadPct(0);
     setUploadMsg(`上传中…（${imgs.length} 张）`);
     try {
       if (imgs.length === 1) {
-        await api.adminUploadImage(imgs[0]);
+        await api.adminUploadImage(imgs[0], { onProgress: ({ percent }) => setUploadPct(percent) });
       } else {
-        const res = await api.adminUploadImages(imgs);
+        const res = await api.adminUploadImages(imgs, { onProgress: ({ percent }) => setUploadPct(percent) });
         if (res.failed?.length) {
           setErr(`有 ${res.failed.length} 张上传失败：${res.failed.slice(0, 3).map((x) => x.name).join(", ")}${res.failed.length > 3 ? "…" : ""}`);
         }
@@ -78,6 +80,7 @@ export function MediaLibraryPanel({
     } finally {
       setBusy(false);
       setUploadMsg("");
+      setUploadPct(null);
     }
   };
 
@@ -251,6 +254,14 @@ export function MediaLibraryPanel({
         </div>
 
         {err ? <div style={{ marginTop: 12, color: "red" }}>{err}</div> : null}
+        {uploadPct !== null ? (
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            <div className="muted">上传进度：{uploadPct}%</div>
+            <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
+              <div style={{ width: `${uploadPct}%`, height: "100%", background: "var(--accent)" }} />
+            </div>
+          </div>
+        ) : null}
         {dragOver ? (
           <div
             className="card"
@@ -372,13 +383,17 @@ export function MediaLibraryPanel({
                         if (!f) return;
                         setErr(null);
                         setBusy(true);
+                        setUploadPct(0);
                         try {
-                          await api.adminUploadImage(f, { replace: it.name });
+                          await api.adminUploadImage(f, { replace: it.name, onProgress: ({ percent }) => setUploadPct(percent) });
+                          // Fast UI: update the list immediately; refresh for accurate ordering/thumbs.
+                          setItems((prev) => prev.map((x) => (x.name === it.name ? { ...x, updatedAt: new Date().toISOString() } : x)));
                           await refresh();
                         } catch (err: any) {
                           setErr(err?.message ?? String(err));
                         } finally {
                           setBusy(false);
+                          setUploadPct(null);
                         }
                       }}
                     />
@@ -393,6 +408,14 @@ export function MediaLibraryPanel({
                       setBusy(true);
                       try {
                         await api.adminDeleteUpload(it.name);
+                        // Fast UI: remove immediately, then refresh.
+                        setItems((prev) => prev.filter((x) => x.name !== it.name));
+                        setSelected((prev) => {
+                          if (!prev.has(it.name)) return prev;
+                          const next = new Set(prev);
+                          next.delete(it.name);
+                          return next;
+                        });
                         await refresh();
                       } catch (err: any) {
                         setErr(err?.message ?? String(err));

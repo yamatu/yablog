@@ -33,6 +33,7 @@ export function ImageField({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [previewBust, setPreviewBust] = useState(0);
+  const [progress, setProgress] = useState<number | null>(null);
 
   const replaceName = useMemo(() => uploadsNameFromUrl(value), [value]);
   const previewUrl = useMemo(() => {
@@ -85,14 +86,18 @@ export function ImageField({
               if (!f) return;
               setErr(null);
               setBusy(true);
+              setProgress(0);
               try {
-                const res = await api.adminUploadImage(f);
+                const res = await api.adminUploadImage(f, {
+                  onProgress: ({ percent }) => setProgress(percent),
+                });
                 onChange(res.url);
                 setPreviewBust(Date.now());
               } catch (err: any) {
                 setErr(err?.message ?? String(err));
               } finally {
                 setBusy(false);
+                setProgress(null);
               }
             }}
           />
@@ -121,20 +126,25 @@ export function ImageField({
               if (!f || !replaceName) return;
               setErr(null);
               setBusy(true);
+              setProgress(0);
               try {
-                const res = await api.adminUploadImage(f, { replace: replaceName });
+                const res = await api.adminUploadImage(f, {
+                  replace: replaceName,
+                  onProgress: ({ percent }) => setProgress(percent),
+                });
                 onChange(res.url);
                 setPreviewBust(Date.now());
               } catch (err: any) {
                 setErr(err?.message ?? String(err));
               } finally {
                 setBusy(false);
+                setProgress(null);
               }
             }}
           />
         </label>
 
-        {busy ? <span className="muted">处理中…</span> : null}
+        {busy ? <span className="muted">{progress === null ? "处理中…" : `上传中… ${progress}%`}</span> : null}
       </div>
 
       {help ? <div className="muted">{help}</div> : null}
