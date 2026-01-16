@@ -85,6 +85,14 @@ export type AiSettings = {
   };
 };
 
+export type CloudflareSettings = {
+  enabled: boolean;
+  autoPurge: boolean;
+  email: string;
+  apiKey: string;
+  zoneId: string;
+};
+
 export type SiteSettings = {
   nav: {
     brandText: string;
@@ -390,6 +398,15 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ai }),
     }),
+
+  adminGetCloudflare: () => json<{ cloudflare: CloudflareSettings }>("/api/admin/cloudflare"),
+  adminUpdateCloudflare: (cloudflare: CloudflareSettings) =>
+    json<{ ok: true }>("/api/admin/cloudflare", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cloudflare }),
+    }),
+  adminCloudflarePurge: () => json<{ ok: true }>("/api/admin/cloudflare/purge", { method: "POST" }),
 
   adminUploadImage: (file: File, opts?: { replace?: string; onProgress?: (p: { loaded: number; total: number; percent: number }) => void }) => {
     const fd = new FormData();

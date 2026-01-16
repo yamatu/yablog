@@ -19,11 +19,13 @@ import { createCache } from "./cache.js";
 import { config } from "./config.js";
 import {
   defaultAiSettings,
+  defaultCloudflareSettings,
   defaultSiteSettings,
   deleteIpBan,
   ensureAdminUser,
   getFirstUser,
   getAiSettings,
+  getCloudflareSettings,
   getSiteSettings,
   getUserById,
   hasAnyUsers,
@@ -32,6 +34,7 @@ import {
   migrateDb,
   openDb,
   setAiSettings,
+  setCloudflareSettings,
   setSiteSettings,
   upsertIpBan,
   updateUserCredentials,
@@ -75,11 +78,104 @@ try {
   setAiSettings(db, defaultAiSettings());
 }
 
+// Ensure a default Cloudflare settings row exists (admin-only secrets).
+try {
+  const current = getCloudflareSettings(db);
+  const exists = db.prepare("SELECT 1 as ok FROM settings WHERE key = ? LIMIT 1").get("cloudflare_settings") as
+    | { ok: 1 }
+    | undefined;
+  if (!exists) setCloudflareSettings(db, current ?? defaultCloudflareSettings());
+} catch {
+  setCloudflareSettings(db, defaultCloudflareSettings());
+}
+
 let isRestoring = false;
 let isBackingUp = false;
 
 let siteCache = getSiteSettings(db);
 let aiCache = getAiSettings(db);
+let cloudflareCache = getCloudflareSettings(db);
+
+type CfPurgeResult = { ok: true } | { ok: false; error: string };
+const cfIsConfigured = () =>
+  Boolean(cloudflareCache.enabled && cloudflareCache.email.trim() && cloudflareCache.apiKey.trim() && cloudflareCache.zoneId.trim());
+
+const cfPurgeEverything = async (): Promise<CfPurgeResult> => {
+  if (!cfIsConfigured()) return { ok: false, error: "cloudflare_not_configured" };
+  const email = cloudflareCache.email.trim();
+  const apiKey = cloudflareCache.apiKey.trim();
+  const zoneId = cloudflareCache.zoneId.trim();
+
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const resp = await fetch(`https://api.cloudflare.com/client/v4/zones/${encodeURIComponent(zoneId)}/purge_cache`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        "X-Auth-Email": email,
+        "X-Auth-Key": apiKey,
+      },
+      body: JSON.stringify({ purge_everything: true }),
+    });
+
+    const data = (await resp.json().catch(() => null)) as any;
+    if (!resp.ok || !data?.success) {
+      const msg =
+        (Array.isArray(data?.errors) && data.errors[0]?.message) ||
+        (typeof data?.message === "string" ? data.message : null) ||
+        `HTTP ${resp.status}`;
+      return { ok: false, error: `cloudflare_purge_failed:${msg}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    const msg = String(e?.name === "AbortError" ? "timeout" : e?.message ?? e);
+    return { ok: false, error: `cloudflare_purge_failed:${msg}` };
+  } finally {
+    clearTimeout(t);
+  }
+};
+
+let cfPurgeTimer: NodeJS.Timeout | null = null;
+let cfLastPurgeAt = 0;
+let cfInFlight: Promise<CfPurgeResult> | null = null;
+
+const runCloudflarePurge = async (reason: string, manual: boolean): Promise<CfPurgeResult> => {
+  if (cfInFlight) return await cfInFlight;
+  if (!cloudflareCache.enabled) return manual ? { ok: false, error: "cloudflare_disabled" } : { ok: true };
+  if (!manual && !cloudflareCache.autoPurge) return { ok: true };
+  if (!cfIsConfigured()) return manual ? { ok: false, error: "cloudflare_not_configured" } : { ok: true };
+
+  const now = Date.now();
+  if (!manual && now - cfLastPurgeAt < 2000) return { ok: true };
+
+  cfInFlight = (async () => {
+    const res = await cfPurgeEverything();
+    if (res.ok) cfLastPurgeAt = Date.now();
+    else {
+      // eslint-disable-next-line no-console
+      console.warn("[yablog-api] cloudflare purge failed", { reason, error: res.error });
+    }
+    return res;
+  })();
+
+  try {
+    return await cfInFlight;
+  } finally {
+    cfInFlight = null;
+  }
+};
+
+const scheduleCloudflarePurge = (reason: string) => {
+  if (!cloudflareCache.enabled || !cloudflareCache.autoPurge) return;
+  if (!cfIsConfigured()) return;
+  if (cfPurgeTimer) return;
+  cfPurgeTimer = setTimeout(() => {
+    cfPurgeTimer = null;
+    void runCloudflarePurge(reason, false);
+  }, 800);
+};
 
 const ipKey = (ip: string | undefined | null) => (ip ?? "").replace("::ffff:", "") || "unknown";
 let bannedIpSet = new Set<string>();
@@ -936,6 +1032,7 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
   const body = z.object({ site: siteSchema }).parse(req.body);
   setSiteSettings(db, body.site);
   siteCache = body.site;
+  scheduleCloudflarePurge("site");
   res.json({ ok: true });
 });
 
@@ -965,6 +1062,38 @@ adminRouter.put("/ai", (req: AuthedRequest, res) => {
   const body = z.object({ ai: aiSchema }).parse(req.body);
   setAiSettings(db, body.ai);
   aiCache = body.ai;
+  res.json({ ok: true });
+});
+
+adminRouter.get("/cloudflare", (_req, res) => {
+  res.json({ cloudflare: cloudflareCache });
+});
+
+adminRouter.put("/cloudflare", (req: AuthedRequest, res) => {
+  const schema = z.object({
+    enabled: z.boolean().default(false),
+    autoPurge: z.boolean().default(true),
+    email: z.string().max(320).default(""),
+    apiKey: z.string().max(8000).default(""),
+    zoneId: z.string().max(100).default(""),
+  });
+  const body = z.object({ cloudflare: schema }).parse(req.body);
+  const next = body.cloudflare;
+
+  if (next.enabled) {
+    if (!next.email.trim()) return res.status(400).json({ error: "cloudflare_email_required" });
+    if (!next.apiKey.trim()) return res.status(400).json({ error: "cloudflare_api_key_required" });
+    if (!next.zoneId.trim()) return res.status(400).json({ error: "cloudflare_zone_required" });
+  }
+
+  setCloudflareSettings(db, next);
+  cloudflareCache = next;
+  res.json({ ok: true });
+});
+
+adminRouter.post("/cloudflare/purge", async (_req: AuthedRequest, res) => {
+  const r = await runCloudflarePurge("manual", true);
+  if (!r.ok) return res.status(400).json({ error: r.error });
   res.json({ ok: true });
 });
 
@@ -1062,6 +1191,7 @@ adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedReques
 
   try {
     const url = await storeUploadedImage(file, query.replace ?? null);
+    if (query.replace) scheduleCloudflarePurge("upload_replace");
     res.json({ ok: true, url });
   } catch (e: any) {
     if (String(e?.message || e) === "not_found") return res.status(404).json({ error: "not_found" });
@@ -1373,7 +1503,9 @@ adminRouter.put("/account", async (req: AuthedRequest, res) => {
   res.json({ ok: true, user: { userId, username: nextUsername } });
 });
 
-mountAdminRoutes(adminRouter, db, cache);
+mountAdminRoutes(adminRouter, db, cache, {
+  onContentChanged: (reason) => scheduleCloudflarePurge(reason),
+});
 app.use("/api/admin", adminRouter);
 
 if (config.webDistPath && fs.existsSync(config.webDistPath)) {

@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { AiSettings, api, CommentAdminRow, IpBan, Link as FriendLink, LinkRequest, Post, SuspiciousIp, User } from "../../api";
+import { AiSettings, api, CloudflareSettings, CommentAdminRow, IpBan, Link as FriendLink, LinkRequest, Post, SuspiciousIp, User } from "../../api";
 import { ImageField } from "../../components/ImageField";
 import { Markdown } from "../../components/Markdown";
 import { MediaLibraryPanel } from "../../components/MediaLibraryModal";
@@ -657,6 +657,11 @@ export function AdminSettingsPage() {
   const [aiMsg, setAiMsg] = useState<string | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
 
+  const [cfDraft, setCfDraft] = useState<CloudflareSettings | null>(null);
+  const [cfBusy, setCfBusy] = useState(false);
+  const [cfMsg, setCfMsg] = useState<string | null>(null);
+  const [cfErr, setCfErr] = useState<string | null>(null);
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -681,6 +686,22 @@ export function AdminSettingsPage() {
         const res = await api.adminGetAi();
         if (!alive) return;
         setAiDraft(res.ai);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await api.adminGetCloudflare();
+        if (!alive) return;
+        setCfDraft(res.cloudflare);
       } catch {
         // ignore
       }
@@ -811,6 +832,42 @@ export function AdminSettingsPage() {
       setAiErr(e?.message ?? String(e));
     } finally {
       setAiBusy(false);
+    }
+  };
+
+  const saveCloudflare = async () => {
+    if (!cfDraft) return;
+    setCfErr(null);
+    setCfMsg(null);
+    setCfBusy(true);
+    try {
+      await api.adminUpdateCloudflare(cfDraft);
+      setCfMsg("Cloudflare 设置已保存");
+    } catch (e: any) {
+      const raw = e?.message ?? String(e);
+      if (raw.includes("cloudflare_email_required")) setCfErr("请输入 Cloudflare 邮箱");
+      else if (raw.includes("cloudflare_api_key_required")) setCfErr("请输入 Cloudflare Global API Key");
+      else if (raw.includes("cloudflare_zone_required")) setCfErr("请输入 Zone ID（域名区域）");
+      else setCfErr(raw);
+    } finally {
+      setCfBusy(false);
+    }
+  };
+
+  const purgeCloudflare = async () => {
+    setCfErr(null);
+    setCfMsg(null);
+    setCfBusy(true);
+    try {
+      await api.adminCloudflarePurge();
+      setCfMsg("已请求 Cloudflare 刷新缓存（Purge Everything）");
+    } catch (e: any) {
+      const raw = e?.message ?? String(e);
+      if (raw.includes("cloudflare_disabled")) setCfErr("Cloudflare 未启用");
+      else if (raw.includes("cloudflare_not_configured")) setCfErr("Cloudflare 未配置（邮箱/API Key/Zone ID）");
+      else setCfErr(raw);
+    } finally {
+      setCfBusy(false);
     }
   };
 
@@ -1275,26 +1332,66 @@ export function AdminSettingsPage() {
               </div>
 
               <div>
-                <div className="widget-title">Cloudflare CDN 缓存</div>
-                <div style={{ display: "grid", gap: 12 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div className="widget-title">Cloudflare 缓存自动刷新</div>
+                {!cfDraft ? (
+                  <div className="muted">加载 Cloudflare 设置中…</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <input
+                        type="checkbox"
+                        checked={cfDraft.enabled}
+                        onChange={(e) => setCfDraft({ ...cfDraft, enabled: e.target.checked })}
+                        style={{ width: "auto" }}
+                      />
+                      <span>启用 Cloudflare Purge（通过邮箱 + Global API Key + Zone ID 自动刷新缓存）</span>
+                    </label>
+
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <input
+                        type="checkbox"
+                        checked={cfDraft.autoPurge}
+                        onChange={(e) => setCfDraft({ ...cfDraft, autoPurge: e.target.checked })}
+                        disabled={!cfDraft.enabled}
+                        style={{ width: "auto" }}
+                      />
+                      <span>网页内容更新时自动刷新（发布/修改文章、站点设置、替换图片等）</span>
+                    </label>
+
                     <input
-                      type="checkbox"
-                      checked={siteDraft.cdn.cloudflare.cacheEnabled}
-                      onChange={(e) =>
-                        setSiteDraft({
-                          ...siteDraft,
-                          cdn: { ...siteDraft.cdn, cloudflare: { ...siteDraft.cdn.cloudflare, cacheEnabled: e.target.checked } },
-                        })
-                      }
-                      style={{ width: "auto" }}
+                      value={cfDraft.email}
+                      onChange={(e) => setCfDraft({ ...cfDraft, email: e.target.value })}
+                      placeholder="Cloudflare 邮箱（Email）"
                     />
-                    <span>允许缓存（开启后可能导致新文章显示有延迟；若 Cloudflare 使用“Cache Everything”建议关闭）</span>
-                  </label>
-                  <div className="muted">
-                    关闭时：后端会对页面与公开 API 返回 <code>Cache-Control: no-store</code>，避免 Cloudflare 缓存导致内容不更新。
+                    <input
+                      type="password"
+                      value={cfDraft.apiKey}
+                      onChange={(e) => setCfDraft({ ...cfDraft, apiKey: e.target.value })}
+                      placeholder="Cloudflare Global API Key（敏感，仅保存在服务器）"
+                    />
+                    <input
+                      value={cfDraft.zoneId}
+                      onChange={(e) => setCfDraft({ ...cfDraft, zoneId: e.target.value })}
+                      placeholder="Zone ID（域名区域 / Zone Identifier）"
+                    />
+
+                    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                      <button className="btn-ghost" onClick={saveCloudflare} disabled={cfBusy}>
+                        {cfBusy ? "保存中…" : "保存 Cloudflare 设置"}
+                      </button>
+                      <button className="btn-ghost" onClick={purgeCloudflare} disabled={cfBusy || !cfDraft.enabled}>
+                        {cfBusy ? "处理中…" : "立即刷新缓存"}
+                      </button>
+                      {cfMsg ? <span style={{ color: "green" }}>{cfMsg}</span> : null}
+                      {cfErr ? <span style={{ color: "red" }}>{cfErr}</span> : null}
+                    </div>
+
+                    <div className="muted">
+                      重要：若 Cloudflare 开了 <code>Cache Everything</code> 或忽略源站缓存头，请在 Cloudflare 里对{" "}
+                      <code>/admin*</code>、<code>/api*</code> 设置 <code>Bypass cache</code>，否则后台仍可能被缓存。
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>

@@ -881,6 +881,19 @@ export type AiSettings = {
   };
 };
 
+// NOTE: This contains sensitive credentials and must NEVER be exposed via public APIs.
+// Only serve it from admin-authenticated endpoints.
+export type CloudflareSettings = {
+  enabled: boolean;
+  // When true, YaBlog will attempt to purge Cloudflare cache after content updates.
+  autoPurge: boolean;
+  // Cloudflare Global API Key auth (legacy, but user-requested).
+  email: string;
+  apiKey: string;
+  // Zone ID ("域名区域"/Zone) for the domain.
+  zoneId: string;
+};
+
 export const defaultAiSettings = (): AiSettings => ({
   enabled: false,
   mode: "auto",
@@ -894,6 +907,14 @@ export const defaultAiSettings = (): AiSettings => ({
     envKey: "GPT_API_KEY",
     wireApi: "responses",
   },
+});
+
+export const defaultCloudflareSettings = (): CloudflareSettings => ({
+  enabled: false,
+  autoPurge: true,
+  email: "",
+  apiKey: "",
+  zoneId: "",
 });
 
 const mergeAiSettings = (base: AiSettings, incoming: any): AiSettings => {
@@ -916,6 +937,17 @@ const mergeAiSettings = (base: AiSettings, incoming: any): AiSettings => {
   };
 };
 
+const mergeCloudflareSettings = (base: CloudflareSettings, incoming: any): CloudflareSettings => {
+  const safe = typeof incoming === "object" && incoming ? incoming : {};
+  return {
+    enabled: Boolean(safe?.enabled ?? base.enabled),
+    autoPurge: Boolean(safe?.autoPurge ?? base.autoPurge),
+    email: String(safe?.email ?? base.email),
+    apiKey: String(safe?.apiKey ?? base.apiKey),
+    zoneId: String(safe?.zoneId ?? base.zoneId),
+  };
+};
+
 export const getAiSettings = (db: Db): AiSettings => {
   const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get("ai_settings") as
     | { value: string }
@@ -932,6 +964,27 @@ export const getAiSettings = (db: Db): AiSettings => {
 export const setAiSettings = (db: Db, settings: AiSettings) => {
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
     "ai_settings",
+    JSON.stringify(settings),
+    nowIso(),
+  );
+};
+
+export const getCloudflareSettings = (db: Db): CloudflareSettings => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get("cloudflare_settings") as
+    | { value: string }
+    | undefined;
+  if (!row) return defaultCloudflareSettings();
+  try {
+    const parsed = JSON.parse(row.value);
+    return mergeCloudflareSettings(defaultCloudflareSettings(), parsed);
+  } catch {
+    return defaultCloudflareSettings();
+  }
+};
+
+export const setCloudflareSettings = (db: Db, settings: CloudflareSettings) => {
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+    "cloudflare_settings",
     JSON.stringify(settings),
     nowIso(),
   );
