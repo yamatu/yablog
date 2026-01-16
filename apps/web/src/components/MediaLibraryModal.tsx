@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { MdClose, MdContentCopy, MdDelete, MdFileUpload, MdSearch } from "react-icons/md";
+import { MdClose, MdContentCopy, MdDelete, MdFileUpload, MdRefresh, MdSearch } from "react-icons/md";
 
 import { api } from "../api";
 
@@ -51,6 +51,7 @@ export function MediaLibraryPanel({
   const [uploadMsg, setUploadMsg] = useState<string>("");
   const [dragOver, setDragOver] = useState(false);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const [cfMsg, setCfMsg] = useState<string>("");
 
   const refresh = async () => {
     setErr(null);
@@ -196,6 +197,47 @@ export function MediaLibraryPanel({
             />
           </label>
 
+          <button
+            className="pill"
+            title="刷新 Cloudflare 缓存（Purge Everything）"
+            onClick={async () => {
+              setErr(null);
+              setCfMsg("");
+              setBusy(true);
+              try {
+                await api.adminCloudflarePurge();
+                setCfMsg("已刷新 Cloudflare 缓存");
+              } catch (e: any) {
+                setErr(e?.message ?? String(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <MdRefresh />
+            刷新缓存
+          </button>
+
+          <button
+            className="pill"
+            title="刷新图库列表"
+            onClick={async () => {
+              setErr(null);
+              setCfMsg("");
+              setBusy(true);
+              try {
+                await refresh();
+              } catch (e: any) {
+                setErr(e?.message ?? String(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <MdRefresh />
+            刷新列表
+          </button>
+
           <label className="pill" style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer" }} title="全选/取消全选（基于当前筛选）">
             <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ width: 18, height: 18 }} />
             全选
@@ -254,6 +296,7 @@ export function MediaLibraryPanel({
         </div>
 
         {err ? <div style={{ marginTop: 12, color: "red" }}>{err}</div> : null}
+        {cfMsg ? <div style={{ marginTop: 12, color: "green" }}>{cfMsg}</div> : null}
         {uploadPct !== null ? (
           <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
             <div className="muted">上传进度：{uploadPct}%</div>

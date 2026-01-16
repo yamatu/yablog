@@ -148,7 +148,8 @@ const runCloudflarePurge = async (reason: string, manual: boolean): Promise<CfPu
   if (!cfIsConfigured()) return manual ? { ok: false, error: "cloudflare_not_configured" } : { ok: true };
 
   const now = Date.now();
-  if (!manual && now - cfLastPurgeAt < 2000) return { ok: true };
+  // Avoid spamming Cloudflare API; allow slightly higher frequency for fast-moving edits/uploads.
+  if (!manual && now - cfLastPurgeAt < 800) return { ok: true };
 
   cfInFlight = (async () => {
     const res = await cfPurgeEverything();
@@ -171,10 +172,11 @@ const scheduleCloudflarePurge = (reason: string) => {
   if (!cloudflareCache.enabled || !cloudflareCache.autoPurge) return;
   if (!cfIsConfigured()) return;
   if (cfPurgeTimer) return;
+  const delayMs = reason.startsWith("upload") ? 200 : 600;
   cfPurgeTimer = setTimeout(() => {
     cfPurgeTimer = null;
     void runCloudflarePurge(reason, false);
-  }, 800);
+  }, delayMs);
 };
 
 const ipKey = (ip: string | undefined | null) => (ip ?? "").replace("::ffff:", "") || "unknown";
@@ -1191,7 +1193,9 @@ adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedReques
 
   try {
     const url = await storeUploadedImage(file, query.replace ?? null);
-    if (query.replace) scheduleCloudflarePurge("upload_replace");
+    // When Cloudflare is used with aggressive caching, ensure uploads are visible quickly.
+    scheduleCloudflarePurge(query.replace ? "upload_replace" : "upload_new");
+    void runCloudflarePurge(query.replace ? "upload_replace" : "upload_new", false);
     res.json({ ok: true, url });
   } catch (e: any) {
     if (String(e?.message || e) === "not_found") return res.status(404).json({ error: "not_found" });
@@ -1224,6 +1228,10 @@ adminRouter.post("/upload/batch", uploadImage.array("files", 30), async (req: Au
     }
   }
 
+  if (urls.length) {
+    scheduleCloudflarePurge("upload_batch");
+    void runCloudflarePurge("upload_batch", false);
+  }
   res.json({ ok: true, urls, failed });
 });
 
@@ -1268,6 +1276,8 @@ adminRouter.delete("/uploads/:name", (req: AuthedRequest, res) => {
 
   fs.rmSync(target, { force: true });
   fs.rmSync(path.join(thumbsDir, thumbNameFor(name)), { force: true });
+  scheduleCloudflarePurge("upload_delete");
+  void runCloudflarePurge("upload_delete", false);
   res.json({ ok: true });
 });
 
