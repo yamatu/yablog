@@ -237,7 +237,8 @@ async function xhrJson<T>(
 export const api = {
   health: () => json<{ ok: true }>("/api/health"),
 
-  captcha: () => json<Captcha>("/api/captcha"),
+  // Use POST to avoid aggressive CDN caching (e.g. Cloudflare "Cache Everything").
+  captcha: () => json<Captcha>("/api/captcha", { method: "POST" }),
 
   search: (args: { q: string; page?: number; limit?: number }) => {
     const url = new URL("/api/search", window.location.origin);

@@ -35,12 +35,25 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
     return hit as T;
   };
 
-  router.get("/captcha", (_req, res) => {
+  const issueCaptcha = (res: any) => {
+    // Captchas must never be cached. If a CDN caches it, multiple visitors may share the same id
+    // and verification will fail (the first submit consumes the captcha).
+    res.setHeader("cache-control", "no-store");
+    res.setHeader("pragma", "no-cache");
+    res.setHeader("expires", "0");
+    res.setHeader("cdn-cache-control", "no-store");
+    res.setHeader("surrogate-control", "no-store");
+
     const a = 1 + Math.floor(Math.random() * 9);
     const b = 1 + Math.floor(Math.random() * 9);
     const { id } = createCaptcha(db, { answer: String(a + b), ttlMs: 10 * 60 * 1000 });
     res.json({ id, question: `${a} + ${b} = ?` });
-  });
+  };
+
+  // Prefer POST to avoid aggressive CDN caching (Cloudflare "Cache Everything" only affects GET/HEAD).
+  router.post("/captcha", (_req, res) => issueCaptcha(res));
+  // Keep GET for backward compatibility (still marked no-store).
+  router.get("/captcha", (_req, res) => issueCaptcha(res));
 
   router.get("/search", async (req, res) => {
     const query = z
