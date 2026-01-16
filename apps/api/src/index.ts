@@ -980,30 +980,21 @@ const uploadImage = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedRequest & { file?: any }, res) => {
-  const query = z.object({ replace: z.string().optional() }).parse(req.query);
+type MulterFile = { filename: string; originalname: string; mimetype: string; path: string };
 
-  const file = req.file as
-    | { filename: string; originalname: string; mimetype: string; path: string }
-    | undefined;
-  if (!file) return res.status(400).json({ error: "file_required" });
-  if (!file.mimetype.startsWith("image/")) {
-    fs.rmSync(file.path, { force: true });
-    return res.status(400).json({ error: "image_only" });
-  }
-
+async function storeUploadedImage(file: MulterFile, replace?: string | null): Promise<string> {
   const rawExt = path.extname(file.originalname).toLowerCase() || ".img";
   const passthrough = rawExt === ".gif" || rawExt === ".svg";
   const outExt = passthrough ? rawExt : ".webp";
 
-  const replaceName = query.replace ? safeUploadName(String(query.replace)) : null;
+  const replaceName = replace ? safeUploadName(String(replace)) : null;
   const targetName = replaceName ?? `${file.filename}${outExt}`;
   const targetPath = path.join(uploadsDir, targetName);
 
   if (replaceName) {
     if (!fs.existsSync(targetPath)) {
       fs.rmSync(file.path, { force: true });
-      return res.status(404).json({ error: "not_found" });
+      throw new Error("not_found");
     }
   }
 
@@ -1037,8 +1028,7 @@ adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedReques
           // ignore thumb errors
         }
 
-        const url = `/uploads/${encodeURIComponent(fallbackName)}`;
-        return res.json({ ok: true, url });
+        return `/uploads/${encodeURIComponent(fallbackName)}`;
       }
     }
 
@@ -1052,15 +1042,59 @@ adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedReques
       }
     }
 
-    const url = `/uploads/${encodeURIComponent(targetName)}`;
-    res.json({ ok: true, url });
+    return `/uploads/${encodeURIComponent(targetName)}`;
   } catch (e) {
     fs.rmSync(file.path, { force: true });
     fs.rmSync(tmpOut, { force: true });
+    throw e;
+  }
+}
+
+adminRouter.post("/upload", uploadImage.single("file"), async (req: AuthedRequest & { file?: any }, res) => {
+  const query = z.object({ replace: z.string().optional() }).parse(req.query);
+
+  const file = req.file as MulterFile | undefined;
+  if (!file) return res.status(400).json({ error: "file_required" });
+  if (!file.mimetype.startsWith("image/")) {
+    fs.rmSync(file.path, { force: true });
+    return res.status(400).json({ error: "image_only" });
+  }
+
+  try {
+    const url = await storeUploadedImage(file, query.replace ?? null);
+    res.json({ ok: true, url });
+  } catch (e: any) {
+    if (String(e?.message || e) === "not_found") return res.status(404).json({ error: "not_found" });
     // eslint-disable-next-line no-console
     console.error("[yablog-api] upload failed", e);
     res.status(500).json({ error: "upload_failed" });
   }
+});
+
+adminRouter.post("/upload/batch", uploadImage.array("files", 30), async (req: AuthedRequest & { files?: any }, res) => {
+  const files = (req.files as MulterFile[] | undefined) ?? [];
+  if (!files.length) return res.status(400).json({ error: "file_required" });
+
+  const urls: string[] = [];
+  const failed: { name: string; error: string }[] = [];
+
+  for (const f of files) {
+    if (!f?.mimetype?.startsWith("image/")) {
+      if (f?.path) fs.rmSync(f.path, { force: true });
+      failed.push({ name: f?.originalname || "file", error: "image_only" });
+      continue;
+    }
+    try {
+      const url = await storeUploadedImage(f, null);
+      urls.push(url);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[yablog-api] batch upload failed", e);
+      failed.push({ name: f.originalname || f.filename, error: "upload_failed" });
+    }
+  }
+
+  res.json({ ok: true, urls, failed });
 });
 
 adminRouter.get("/uploads", (_req: AuthedRequest, res) => {

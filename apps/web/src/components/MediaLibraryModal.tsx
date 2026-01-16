@@ -12,6 +12,13 @@ type UploadItem = {
   updatedAt: string;
 };
 
+function withCacheBuster(url: string, key: string) {
+  const u = url.trim();
+  if (!u) return u;
+  const sep = u.includes("?") ? "&" : "?";
+  return `${u}${sep}v=${encodeURIComponent(key)}`;
+}
+
 function prettyBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let n = bytes;
@@ -41,11 +48,37 @@ export function MediaLibraryPanel({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [uploadMsg, setUploadMsg] = useState<string>("");
+  const [dragOver, setDragOver] = useState(false);
 
   const refresh = async () => {
     setErr(null);
     const res = await api.adminListUploads();
     setItems(res.items);
+  };
+
+  const uploadFiles = async (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    setErr(null);
+    setBusy(true);
+    setUploadMsg(`上传中…（${imgs.length} 张）`);
+    try {
+      if (imgs.length === 1) {
+        await api.adminUploadImage(imgs[0]);
+      } else {
+        const res = await api.adminUploadImages(imgs);
+        if (res.failed?.length) {
+          setErr(`有 ${res.failed.length} 张上传失败：${res.failed.slice(0, 3).map((x) => x.name).join(", ")}${res.failed.length > 3 ? "…" : ""}`);
+        }
+      }
+      await refresh();
+    } catch (err: any) {
+      setErr(err?.message ?? String(err));
+    } finally {
+      setBusy(false);
+      setUploadMsg("");
+    }
   };
 
   useEffect(() => {
@@ -107,6 +140,22 @@ export function MediaLibraryPanel({
         overflow: "auto",
         ...containerStyle,
       }}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={async (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const files = Array.from(e.dataTransfer.files ?? []);
+        if (!files.length) return;
+        await uploadFiles(files);
+      }}
     >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
@@ -133,21 +182,13 @@ export function MediaLibraryPanel({
             <input
               type="file"
               accept="image/*"
+              multiple
               style={{ display: "none" }}
               onChange={async (e) => {
-                const f = e.target.files?.[0];
+                const files = Array.from(e.target.files ?? []);
                 e.currentTarget.value = "";
-                if (!f) return;
-                setErr(null);
-                setBusy(true);
-                try {
-                  await api.adminUploadImage(f);
-                  await refresh();
-                } catch (err: any) {
-                  setErr(err?.message ?? String(err));
-                } finally {
-                  setBusy(false);
-                }
+                if (!files.length) return;
+                await uploadFiles(files);
               }}
             />
           </label>
@@ -205,11 +246,29 @@ export function MediaLibraryPanel({
           </div>
 
           <div className="muted" style={{ whiteSpace: "nowrap" }}>
-            {busy ? "加载中…" : `${filtered.length} 张`}
+            {busy ? (uploadMsg || "加载中…") : `${filtered.length} 张`}
           </div>
         </div>
 
         {err ? <div style={{ marginTop: 12, color: "red" }}>{err}</div> : null}
+        {dragOver ? (
+          <div
+            className="card"
+            style={{
+              marginTop: 12,
+              padding: 18,
+              borderStyle: "dashed",
+              textAlign: "center",
+              background: "rgba(255,255,255,0.04)",
+            }}
+          >
+            拖拽图片到这里上传
+          </div>
+        ) : (
+          <div className="muted" style={{ marginTop: 10 }}>
+            提示：支持批量选择上传，也可以直接拖拽图片到图库区域
+          </div>
+        )}
 
         <div style={{ height: 16 }} />
 
@@ -240,7 +299,7 @@ export function MediaLibraryPanel({
                   }}
                 >
                   <img
-                    src={it.thumbUrl ?? it.url}
+                    src={withCacheBuster(it.thumbUrl ?? it.url, it.updatedAt)}
                     alt={it.name}
                     loading="lazy"
                     style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }}

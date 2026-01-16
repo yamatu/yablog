@@ -32,11 +32,42 @@ export function ImageField({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [previewBust, setPreviewBust] = useState(0);
 
   const replaceName = useMemo(() => uploadsNameFromUrl(value), [value]);
+  const previewUrl = useMemo(() => {
+    const v = value.trim();
+    if (!v) return "";
+    if (!v.startsWith("/uploads/")) return v;
+    const sep = v.includes("?") ? "&" : "?";
+    return `${v}${sep}v=${encodeURIComponent(String(previewBust || 0))}`;
+  }, [value, previewBust]);
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div
+      style={{ display: "grid", gap: 10 }}
+      onDragOver={(e) => {
+        e.preventDefault();
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        const f = e.dataTransfer.files?.[0];
+        if (!f) return;
+        if (!f.type.startsWith("image/")) return;
+        setErr(null);
+        setBusy(true);
+        try {
+          const res = await api.adminUploadImage(f);
+          onChange(res.url);
+          setPreviewBust(Date.now());
+        } catch (err: any) {
+          setErr(err?.message ?? String(err));
+        } finally {
+          setBusy(false);
+        }
+      }}
+      title="可拖拽图片到这里上传"
+    >
       <div className="muted">{label}</div>
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder ?? "https://... 或 /uploads/..."} />
 
@@ -57,6 +88,7 @@ export function ImageField({
               try {
                 const res = await api.adminUploadImage(f);
                 onChange(res.url);
+                setPreviewBust(Date.now());
               } catch (err: any) {
                 setErr(err?.message ?? String(err));
               } finally {
@@ -92,6 +124,7 @@ export function ImageField({
               try {
                 const res = await api.adminUploadImage(f, { replace: replaceName });
                 onChange(res.url);
+                setPreviewBust(Date.now());
               } catch (err: any) {
                 setErr(err?.message ?? String(err));
               } finally {
@@ -109,7 +142,7 @@ export function ImageField({
 
       {value ? (
         <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
-          <img src={value} alt={label} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+          <img src={previewUrl} alt={label} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
         </div>
       ) : null}
 

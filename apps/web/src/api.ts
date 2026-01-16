@@ -346,6 +346,15 @@ export const api = {
     });
   },
 
+  adminUploadImages: (files: File[]) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return json<{ ok: true; urls: string[]; failed: { name: string; error: string }[] }>(`/api/admin/upload/batch`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+
   adminListUploads: () =>
     json<{
       items: {
