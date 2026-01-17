@@ -17,10 +17,6 @@ export function ImageViewer({
   index: number;
   onIndexChange: (next: number) => void;
 }) {
-  // Defensive: ensure we never leave a full-screen overlay mounted when closed.
-  // (If a Radix version changes presence behavior, a persistent overlay would "blank" the page.)
-  if (!open) return null;
-
   const safeItems = items.filter((it) => it && typeof it.url === "string" && it.url.trim());
   const i = Math.max(0, Math.min(index, Math.max(0, safeItems.length - 1)));
   const current = safeItems[i];
@@ -44,83 +40,97 @@ export function ImageViewer({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.72)",
-            zIndex: 10000,
-          }}
-        />
-        <Dialog.Content
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 10001,
-            display: "grid",
-            gridTemplateRows: "auto 1fr",
-            padding: 14,
-            gap: 12,
-          }}
-        >
-          <div
-            className="glass"
+      {open ? (
+        <Dialog.Portal>
+          <Dialog.Overlay
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              padding: "10px 12px",
-              borderRadius: 14,
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,.72)",
+              zIndex: 10000,
             }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {current?.name || "图片"}
-              </div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                {safeItems.length ? `${i + 1} / ${safeItems.length}` : ""}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button className="btn-ghost" type="button" disabled={!canPrev} onClick={() => onIndexChange(i - 1)} title="上一张">
-                <MdChevronLeft />
-              </button>
-              <button className="btn-ghost" type="button" disabled={!canNext} onClick={() => onIndexChange(i + 1)} title="下一张">
-                <MdChevronRight />
-              </button>
-              <Dialog.Close asChild>
-                <button className="btn-ghost" type="button" title="关闭">
-                  <MdClose />
-                </button>
-              </Dialog.Close>
-            </div>
-          </div>
-
-          <div
+          />
+          <Dialog.Content
             style={{
-              borderRadius: 16,
-              overflow: "hidden",
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(0,0,0,0.25)",
+              position: "fixed",
+              inset: 0,
+              zIndex: 10001,
               display: "grid",
-              placeItems: "center",
+              gridTemplateRows: "auto 1fr",
+              padding: 14,
+              gap: 12,
             }}
           >
-            {current?.url ? (
-              <img
-                src={current.url}
-                alt={current.name || "image"}
-                style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-              />
-            ) : (
-              <div className="muted">暂无图片</div>
-            )}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
+            <div
+              className="glass"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "10px 12px",
+                borderRadius: 14,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {current?.name || "图片"}
+                </div>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {safeItems.length ? `${i + 1} / ${safeItems.length}` : ""}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  disabled={!canPrev}
+                  onClick={() => onIndexChange(i - 1)}
+                  title="上一张"
+                >
+                  <MdChevronLeft />
+                </button>
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  disabled={!canNext}
+                  onClick={() => onIndexChange(i + 1)}
+                  title="下一张"
+                >
+                  <MdChevronRight />
+                </button>
+                <Dialog.Close asChild>
+                  <button className="btn-ghost" type="button" title="关闭">
+                    <MdClose />
+                  </button>
+                </Dialog.Close>
+              </div>
+            </div>
+
+            <div
+              style={{
+                borderRadius: 16,
+                overflow: "hidden",
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(0,0,0,0.25)",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              {current?.url ? (
+                <img
+                  src={current.url}
+                  alt={current.name || "image"}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                />
+              ) : (
+                <div className="muted">暂无图片</div>
+              )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      ) : null}
     </Dialog.Root>
   );
 }
