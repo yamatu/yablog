@@ -103,12 +103,17 @@ export function PostPage() {
     (post ? placeholderImageDataUrl(`postHeader:${post.id}`, post.title) : "");
 
   const viewerItems = useMemo<ViewerItem[]>(() => {
-    if (!post) return headerImage ? [{ url: headerImage, name: "header" }] : [];
+    // Only include images from the article body; the header image is a banner and should not be clickable.
+    if (!post) return [];
+    const cover = (post.coverImage ?? "").trim();
     const items: ViewerItem[] = [];
-    if (headerImage) items.push({ url: headerImage, name: post.title });
-    for (const u of extractImageUrls(post.contentMd || "")) items.push({ url: u });
+    for (const u of extractImageUrls(post.contentMd || "")) {
+      // If authors also put the cover as the first markdown image, treat it as a banner (not part of the viewer set).
+      if (cover && u === cover) continue;
+      items.push({ url: u });
+    }
     return items;
-  }, [headerImage, post?.contentMd, post?.title]);
+  }, [post?.contentMd, post?.coverImage]);
 
   const openViewerByUrl = (src: string) => {
     if (!src) return;
@@ -154,12 +159,7 @@ export function PostPage() {
       {/* Post Header */}
       <div
         className="post-header"
-        style={{ backgroundImage: `url(${headerImage})`, cursor: "zoom-in" }}
-        title="点击放大查看"
-        onClick={() => {
-          setViewerIndex(0);
-          setViewerOpen(true);
-        }}
+        style={{ backgroundImage: `url(${headerImage})` }}
       >
         <div className="post-header-overlay" />
         <div className="post-header-info">
@@ -204,6 +204,10 @@ export function PostPage() {
             <Markdown
               value={post.contentMd}
               onImageClick={(src) => openViewerByUrl(src)}
+              isImageClickable={(src) => {
+                const cover = (post.coverImage ?? "").trim();
+                return !(cover && src === cover);
+              }}
               components={{
                 h1: ({ children }) => {
                   const id = nextHeadingId();

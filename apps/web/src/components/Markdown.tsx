@@ -34,10 +34,13 @@ export function Markdown({
   value,
   components,
   onImageClick,
+  isImageClickable,
 }: {
   value: string;
   components?: Components;
   onImageClick?: (src: string) => void;
+  // Allow callers to opt-out specific images (e.g. post cover/banner).
+  isImageClickable?: (src: string) => boolean;
 }) {
   const CodeBlock = ({
     className,
@@ -109,7 +112,7 @@ export function Markdown({
     img: ({ style, title, ...props }) => {
       const { width, height } = parseSizing(title);
       const src = String((props as any)?.src ?? "");
-      const clickable = Boolean(onImageClick && src);
+      const clickable = Boolean(onImageClick && src && (isImageClickable ? isImageClickable(src) : true));
       const img = (
         <img
           {...props}
