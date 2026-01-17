@@ -124,6 +124,57 @@
   --nav-text: #4c4948;
 }
 
+/* Loading (smooth, non-jarring) */
+.loadingSpinner {
+  border-radius: 999px;
+  border: 3px solid rgba(127, 127, 127, 0.22);
+  border-top-color: var(--accent);
+  animation: spin 0.86s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingSpinner {
+    animation: none;
+  }
+}
+
+.loadingCenter {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 18px;
+}
+
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+}
+
+:root[data-theme="dark"] .loadingOverlay {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.loadingOverlayInner {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+}
+
 * {
   box-sizing: border-box;
 }

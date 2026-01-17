@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { Markdown } from "../components/Markdown";
 import { Sidebar } from "../components/Sidebar";
+import { LoadingCenter } from "../components/Loading";
 import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
 
@@ -26,9 +27,7 @@ export function AboutPage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="card markdown">
             {loading && !about ? (
-              <div style={{ textAlign: "center", padding: 40 }}>
-                <div className="muted">加载中…</div>
-              </div>
+              <LoadingCenter label="加载中…" />
             ) : about ? (
               <Markdown value={about.contentMd} />
             ) : (

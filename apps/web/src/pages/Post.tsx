@@ -8,6 +8,7 @@ import { buildToc, extractImageUrls } from "../markdown";
 import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
 import { ImageViewer, type ViewerItem } from "../components/ImageViewer";
+import { LoadingCenter } from "../components/Loading";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -134,7 +135,9 @@ export function PostPage() {
   if (!post) {
     return (
       <div className="butterfly-hero" style={{ height: '40vh' }}>
-        <div className="hero-content">Loading...</div>
+        <div className="hero-content">
+          <LoadingCenter label="加载文章中…" minHeight={120} />
+        </div>
       </div>
     );
   }

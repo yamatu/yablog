@@ -4,10 +4,88 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>YaBlog</title>
+    <style>
+      /* Minimal boot loader (no inline JS; safe with strict CSP). */
+      #boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(1200px 600px at 20% 10%, rgba(73, 177, 245, 0.22), transparent 60%),
+          radial-gradient(900px 500px at 90% 30%, rgba(255, 114, 66, 0.18), transparent 55%),
+          linear-gradient(180deg, #0b1220, #0b1220);
+        color: #e5e7eb;
+        transition: opacity 260ms ease, transform 260ms ease;
+      }
+      @media (prefers-color-scheme: light) {
+        #boot-loader {
+          background:
+            radial-gradient(1200px 600px at 20% 10%, rgba(73, 177, 245, 0.18), transparent 60%),
+            radial-gradient(900px 500px at 90% 30%, rgba(255, 114, 66, 0.12), transparent 55%),
+            linear-gradient(180deg, #f7f9fe, #f7f9fe);
+          color: #1f2937;
+        }
+      }
+      body.boot-loaded #boot-loader {
+        opacity: 0;
+        transform: translateY(-6px);
+        pointer-events: none;
+      }
+      .boot-inner {
+        width: min(560px, 92vw);
+        padding: 22px 20px;
+        border-radius: 18px;
+        backdrop-filter: blur(14px);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+      }
+      @media (prefers-color-scheme: light) {
+        .boot-inner {
+          background: rgba(255, 255, 255, 0.70);
+          border: 1px solid rgba(31, 41, 55, 0.10);
+          box-shadow: 0 22px 70px rgba(15, 23, 42, 0.14);
+        }
+      }
+      .boot-row { display: flex; align-items: center; gap: 14px; }
+      .boot-title { font-size: 18px; font-weight: 800; letter-spacing: 0.2px; }
+      .boot-sub { margin-top: 6px; opacity: 0.78; font-size: 13px; }
+      .boot-spinner {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        border: 3px solid rgba(255, 255, 255, 0.22);
+        border-top-color: rgba(73, 177, 245, 0.92);
+        animation: boot-spin 0.86s linear infinite;
+      }
+      @media (prefers-color-scheme: light) {
+        .boot-spinner {
+          border: 3px solid rgba(31, 41, 55, 0.16);
+          border-top-color: rgba(73, 177, 245, 0.95);
+        }
+      }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-spinner { animation: none; }
+        #boot-loader { transition: none; }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot-loader" aria-hidden="true">
+      <div class="boot-inner">
+        <div class="boot-row">
+          <div class="boot-spinner"></div>
+          <div style="min-width: 0">
+            <div class="boot-title">YaBlog</div>
+            <div class="boot-sub">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

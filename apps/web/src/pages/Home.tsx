@@ -5,6 +5,7 @@ import { MdKeyboardArrowDown } from "react-icons/md";
 import { api, Post } from "../api";
 import { PostCard } from "../components/PostCard";
 import { Sidebar } from "../components/Sidebar";
+import { LoadingOverlay } from "../components/Loading";
 import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
 
@@ -92,7 +93,8 @@ export function HomePage() {
 
       {/* Main Content Area */}
       <div id="content" className="main-content">
-        <div className="post-list">
+        <div className="post-list" style={{ position: "relative" }}>
+          <LoadingOverlay show={loading && (posts.length > 0 || pinned.length > 0)} label="加载中…" />
           {err ? <div className="card" style={{ padding: 18 }}>加载失败：{err}</div> : null}
 
           {/* 置顶只在卡片左上角显示，不做额外区块标题；仅第一页展示 */}
