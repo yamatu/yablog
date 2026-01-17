@@ -4,7 +4,19 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Switch from "@radix-ui/react-switch";
 import * as Tabs from "@radix-ui/react-tabs";
-import { MdAdd, MdCheck, MdClearAll, MdContentCopy, MdDelete, MdDone, MdEdit, MdExpandMore, MdImage, MdSave } from "react-icons/md";
+import {
+  MdAdd,
+  MdCheck,
+  MdClearAll,
+  MdClose,
+  MdContentCopy,
+  MdDelete,
+  MdDone,
+  MdEdit,
+  MdExpandMore,
+  MdImage,
+  MdSave,
+} from "react-icons/md";
 
 import type { ChatMessage as WireChatMessage } from "../api";
 import { api } from "../api";
@@ -135,6 +147,11 @@ export function AiPage() {
   const [err, setErr] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [pendingImages, setPendingImages] = useState<UiImageMeta[]>([]);
+  const [viewer, setViewer] = useState<{ open: boolean; url: string; name: string }>(() => ({
+    open: false,
+    url: "",
+    name: "",
+  }));
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const active = useMemo(() => index.items.find((m) => m.id === index.activeId) ?? index.items[0], [index]);
@@ -284,6 +301,22 @@ export function AiPage() {
     }
   };
 
+  const openImageViewer = async (meta: UiImageMeta) => {
+    try {
+      setErr(null);
+      const blob = await aiImages.getBlob(meta.id);
+      if (!blob) throw new Error("图片不存在或已被清理");
+      const url = URL.createObjectURL(blob);
+      // Revoke previous URL to avoid leaking object URLs.
+      setViewer((prev) => {
+        if (prev.url) URL.revokeObjectURL(prev.url);
+        return { open: true, url, name: meta.name || "image" };
+      });
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+    }
+  };
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     void send();
@@ -291,6 +324,60 @@ export function AiPage() {
 
   return (
     <div className="aiPage">
+      <Dialog.Root
+        open={viewer.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewer((prev) => {
+              if (prev.url) URL.revokeObjectURL(prev.url);
+              return { open: false, url: "", name: "" };
+            });
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="aiDialogOverlay" />
+          <Dialog.Content
+            className="aiDialogContent"
+            style={{
+              maxWidth: "min(1100px, 95vw)",
+              width: "min(1100px, 95vw)",
+              maxHeight: "92vh",
+              overflow: "hidden",
+              padding: 14,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {viewer.name}
+              </div>
+              <Dialog.Close asChild>
+                <button className="btn-ghost" type="button" title="关闭">
+                  <MdClose />
+                </button>
+              </Dialog.Close>
+            </div>
+            <div style={{ height: 10 }} />
+            {viewer.url ? (
+              <div
+                style={{
+                  borderRadius: 14,
+                  overflow: "hidden",
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.15)",
+                }}
+              >
+                <img
+                  src={viewer.url}
+                  alt={viewer.name}
+                  style={{ width: "100%", height: "calc(92vh - 90px)", objectFit: "contain", display: "block" }}
+                />
+              </div>
+            ) : null}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <div className="aiHero">
         <div className="aiHeroInner container">
           <div className="aiHeroTitle">GPT_5.2</div>
@@ -440,7 +527,15 @@ export function AiPage() {
                   {m.images?.length ? (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
                       {m.images.map((im) => (
-                        <AiImageThumb key={im.id} meta={im} />
+                        <button
+                          key={im.id}
+                          type="button"
+                          title="点击放大"
+                          onClick={() => void openImageViewer(im)}
+                          style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                        >
+                          <AiImageThumb meta={im} />
+                        </button>
                       ))}
                     </div>
                   ) : null}
@@ -512,9 +607,6 @@ export function AiPage() {
             </Tabs.Root>
 
             <div className="aiComposerActions">
-              <div className="muted" style={{ minWidth: 120 }}>
-                {dirty && !index.autoSave ? "未保存" : "\u00A0"}
-              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <label
                   className="btn-ghost"
@@ -548,6 +640,9 @@ export function AiPage() {
                   />
                 </label>
               </div>
+              <div className="muted" style={{ minWidth: 120 }}>
+                {dirty && !index.autoSave ? "未保存" : "\u00A0"}
+              </div>
               <div style={{ flex: 1 }} />
               <button className="btn-primary" disabled={busy || !input.trim()}>
                 {busy ? "发送中…" : "发送"}
@@ -557,7 +652,14 @@ export function AiPage() {
               <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
                 {pendingImages.map((im) => (
                   <div key={im.id} className="pill" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <AiImageThumb meta={im} />
+                    <button
+                      type="button"
+                      title="点击放大"
+                      onClick={() => void openImageViewer(im)}
+                      style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                    >
+                      <AiImageThumb meta={im} />
+                    </button>
                     <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {im.name}
                     </span>
