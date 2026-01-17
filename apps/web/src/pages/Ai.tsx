@@ -4,15 +4,20 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Switch from "@radix-ui/react-switch";
 import * as Tabs from "@radix-ui/react-tabs";
-import { MdAdd, MdCheck, MdClearAll, MdContentCopy, MdDelete, MdDone, MdEdit, MdExpandMore, MdSave } from "react-icons/md";
+import { MdAdd, MdCheck, MdClearAll, MdContentCopy, MdDelete, MdDone, MdEdit, MdExpandMore, MdImage, MdSave } from "react-icons/md";
 
-import { api, ChatMessage } from "../api";
+import type { ChatMessage as WireChatMessage } from "../api";
+import { api } from "../api";
+import { aiImages } from "../aiImages";
 import { Markdown } from "../components/Markdown";
 
 const STORAGE_INDEX_KEY = "yablog_ai_memories_v1";
 const STORAGE_PREFIX = "yablog_ai_memory_v1:";
 
-const defaultSystem: ChatMessage = {
+type UiImageMeta = { id: string; name: string; type: string; size: number; createdAt: number };
+type UiChatMessage = { role: "system" | "user" | "assistant"; content: string; images?: UiImageMeta[] };
+
+const defaultSystem: UiChatMessage = {
   role: "system",
   content: "你是 YaBlog 的 AI 助手。请用清晰、简洁的方式回答问题。",
 };
@@ -49,10 +54,10 @@ const loadIndex = (): MemoryIndex => {
 
 const saveIndex = (idx: MemoryIndex) => localStorage.setItem(STORAGE_INDEX_KEY, JSON.stringify(idx));
 
-const loadMessages = (id: string): ChatMessage[] => {
+const loadMessages = (id: string): UiChatMessage[] => {
   try {
     const raw = localStorage.getItem(msgKey(id));
-    const parsed = raw ? (JSON.parse(raw) as ChatMessage[]) : null;
+    const parsed = raw ? (JSON.parse(raw) as UiChatMessage[]) : null;
     if (Array.isArray(parsed) && parsed.length) return parsed;
   } catch {
     // ignore
@@ -60,11 +65,68 @@ const loadMessages = (id: string): ChatMessage[] => {
   return [defaultSystem];
 };
 
-const saveMessages = (id: string, messages: ChatMessage[]) => localStorage.setItem(msgKey(id), JSON.stringify(messages));
+const saveMessages = (id: string, messages: UiChatMessage[]) => localStorage.setItem(msgKey(id), JSON.stringify(messages));
+
+const fileToDataUrl = async (file: Blob, outType = "image/jpeg", maxSide = 1600, quality = 0.86) => {
+  // Downscale client-side to reduce upload size; keep aspect ratio.
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) {
+    // Fallback: direct base64 (can be big).
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ""));
+      r.onerror = () => reject(r.error ?? new Error("read failed"));
+      r.readAsDataURL(file);
+    });
+  }
+
+  const w = bitmap.width;
+  const h = bitmap.height;
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  const tw = Math.max(1, Math.round(w * scale));
+  const th = Math.max(1, Math.round(h * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas_not_supported");
+  ctx.drawImage(bitmap, 0, 0, tw, th);
+  bitmap.close();
+
+  // toDataURL is widely supported; for huge images we already resized.
+  return canvas.toDataURL(outType, quality);
+};
+
+function AiImageThumb({ meta }: { meta: UiImageMeta }) {
+  const [url, setUrl] = useState<string>("");
+  useEffect(() => {
+    let alive = true;
+    let objUrl: string | null = null;
+    (async () => {
+      const blob = await aiImages.getBlob(meta.id);
+      if (!alive || !blob) return;
+      objUrl = URL.createObjectURL(blob);
+      setUrl(objUrl);
+    })().catch(() => {});
+    return () => {
+      alive = false;
+      if (objUrl) URL.revokeObjectURL(objUrl);
+    };
+  }, [meta.id]);
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt={meta.name}
+      style={{ width: 86, height: 86, objectFit: "cover", borderRadius: 12, border: "1px solid var(--border)" }}
+    />
+  );
+}
 
 export function AiPage() {
   const [index, setIndex] = useState<MemoryIndex>(() => loadIndex());
-  const [messages, setMessages] = useState<ChatMessage[]>(() => loadMessages(loadIndex().activeId));
+  const [messages, setMessages] = useState<UiChatMessage[]>(() => loadMessages(loadIndex().activeId));
   const [dirty, setDirty] = useState(false);
 
   const [input, setInput] = useState("");
@@ -72,6 +134,7 @@ export function AiPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<UiImageMeta[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const active = useMemo(() => index.items.find((m) => m.id === index.activeId) ?? index.items[0], [index]);
@@ -88,6 +151,7 @@ export function AiPage() {
   useEffect(() => {
     setMessages(loadMessages(index.activeId));
     setDirty(false);
+    setPendingImages([]);
   }, [index.activeId]);
 
   useEffect(() => {
@@ -127,6 +191,8 @@ export function AiPage() {
     const next = [defaultSystem];
     setMessages(next);
     setDirty(!index.autoSave);
+    setPendingImages([]);
+    void aiImages.deleteByMemory(index.activeId).catch(() => {});
     if (index.autoSave) {
       try {
         saveMessages(index.activeId, next);
@@ -152,6 +218,8 @@ export function AiPage() {
     const fresh = loadIndex();
     setIndex(fresh);
     setMessages(loadMessages(fresh.activeId));
+    setPendingImages([]);
+    void aiImages.clearAll().catch(() => {});
     setDirty(false);
     setErr(null);
   };
@@ -162,18 +230,45 @@ export function AiPage() {
     setErr(null);
     setBusy(true);
 
-    const next: ChatMessage[] = [...messages, { role: "user", content }];
+    const attach = pendingImages.slice(0, 4);
+    const next: UiChatMessage[] = [...messages, { role: "user", content, images: attach.length ? attach : undefined }];
     setMessages(next);
     if (!index.autoSave) setDirty(true);
     setInput("");
+    setPendingImages([]);
 
     try {
-      const res = await api.chat({ messages: next });
+      const last = next[next.length - 1];
+      const wireMessages: WireChatMessage[] = [];
+      for (let i = 0; i < next.length; i++) {
+        const m = next[i];
+        if (i === next.length - 1 && m.role === "user" && m.images?.length) {
+          const imgs: { dataUrl: string; name?: string }[] = [];
+          for (const im of m.images) {
+            const blob = await aiImages.getBlob(im.id);
+            if (!blob) continue;
+            const dataUrl = await fileToDataUrl(blob);
+            imgs.push({ dataUrl, name: im.name });
+          }
+          wireMessages.push({ role: "user", content: m.content, images: imgs.length ? imgs : undefined });
+        } else {
+          wireMessages.push({ role: m.role, content: m.content });
+        }
+      }
+
+      if (last?.role === "user" && last.images?.length && !wireMessages[wireMessages.length - 1]?.images?.length) {
+        throw new Error("图片读取失败（请重试或重新选择图片）");
+      }
+
+      const res = await api.chat({ messages: wireMessages });
       setMessages((prev) => [...prev, { role: "assistant", content: res.assistant }]);
       if (!index.autoSave) setDirty(true);
     } catch (e: any) {
       const raw = e?.message ?? String(e);
-      setErr(raw.includes("ai_disabled") ? "AI 功能未启用或未配置（请到后台设置开启）。" : raw);
+      if (raw.includes("ai_disabled")) setErr("AI 功能未启用或未配置（请到后台设置开启）。");
+      else if (raw.includes("image_requires_http")) setErr("图片识别需要配置 HTTP 模式的 AI 接口（后台填写 apiBase + apiKey，并使用支持图片的模型）。");
+      else if (raw.includes("payload_too_large")) setErr("图片过大：请换更小的图片，或减少一次发送的图片数量。");
+      else setErr(raw);
     } finally {
       setBusy(false);
     }
@@ -287,6 +382,7 @@ export function AiPage() {
                         } catch {
                           // ignore
                         }
+                        void aiImages.deleteByMemory(index.activeId).catch(() => {});
                         setIndex((prev) => {
                           const nextItems = prev.items.filter((it) => it.id !== prev.activeId);
                           const nextActive = nextItems[0]?.id || "default";
@@ -341,6 +437,13 @@ export function AiPage() {
                   <div className="markdown aiMarkdown" style={{ padding: 0, background: "transparent", border: 0 }}>
                     <Markdown value={m.content} />
                   </div>
+                  {m.images?.length ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+                      {m.images.map((im) => (
+                        <AiImageThumb key={im.id} meta={im} />
+                      ))}
+                    </div>
+                  ) : null}
                   {m.role === "assistant" ? (
                     <div className="aiBubbleActions">
                       <button
@@ -412,11 +515,68 @@ export function AiPage() {
               <div className="muted" style={{ minWidth: 120 }}>
                 {dirty && !index.autoSave ? "未保存" : "\u00A0"}
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <label
+                  className="btn-ghost"
+                  style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: busy ? "not-allowed" : "pointer" }}
+                  title="上传图片（仅保存在本机浏览器，用于本次对话）"
+                >
+                  <MdImage />
+                  图片
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: "none" }}
+                    disabled={busy}
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      e.currentTarget.value = "";
+                      if (!files.length) return;
+                      setErr(null);
+                      try {
+                        const metas: UiImageMeta[] = [];
+                        for (const f of files.slice(0, 4 - pendingImages.length)) {
+                          const meta = await aiImages.put({ memoryId: index.activeId, file: f });
+                          metas.push(meta);
+                        }
+                        setPendingImages((prev) => [...prev, ...metas]);
+                      } catch (e: any) {
+                        setErr(e?.message ?? String(e));
+                      }
+                    }}
+                  />
+                </label>
+              </div>
               <div style={{ flex: 1 }} />
               <button className="btn-primary" disabled={busy || !input.trim()}>
                 {busy ? "发送中…" : "发送"}
               </button>
             </div>
+            {pendingImages.length ? (
+              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
+                {pendingImages.map((im) => (
+                  <div key={im.id} className="pill" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <AiImageThumb meta={im} />
+                    <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {im.name}
+                    </span>
+                    <button
+                      className="btn-ghost"
+                      type="button"
+                      title="移除"
+                      onClick={() => {
+                        setPendingImages((prev) => prev.filter((x) => x.id !== im.id));
+                        void aiImages.delete(im.id).catch(() => {});
+                      }}
+                      style={{ padding: "6px 10px" }}
+                    >
+                      <MdDelete />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </form>
 
           {err ? (

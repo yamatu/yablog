@@ -409,7 +409,8 @@ app.use(
     },
   }),
 );
-app.use(express.json({ limit: "2mb" }));
+// AI vision requests may include base64 image data URLs.
+app.use(express.json({ limit: "25mb" }));
 app.use(cookieParser());
 
 let server: ReturnType<typeof app.listen> | undefined;
@@ -493,6 +494,15 @@ app.post("/api/chat", async (req, res) => {
           z.object({
             role: z.enum(["system", "user", "assistant"]),
             content: z.string().min(1).max(4000),
+            images: z
+              .array(
+                z.object({
+                  dataUrl: z.string().min(1).max(20_000_000),
+                  name: z.string().max(200).optional(),
+                }),
+              )
+              .max(4)
+              .optional(),
           }),
         )
         .min(1)
@@ -500,7 +510,23 @@ app.post("/api/chat", async (req, res) => {
     })
     .parse(req.body);
 
-  const messages = [...body.messages];
+  // Basic validation for image messages to avoid CDN caching issues and unexpected formats.
+  const hasImages = body.messages.some((m) => (m as any).images?.length);
+  if (hasImages) {
+    let totalLen = 0;
+    for (const m of body.messages as any[]) {
+      if (!m.images?.length) continue;
+      if (m.role !== "user") return res.status(400).json({ error: "image_role_must_be_user" });
+      for (const im of m.images) {
+        const s = String(im?.dataUrl ?? "");
+        if (!s.startsWith("data:image/")) return res.status(400).json({ error: "invalid_image" });
+        totalLen += s.length;
+      }
+    }
+    if (totalLen > 24_000_000) return res.status(413).json({ error: "payload_too_large" });
+  }
+
+  const messages = [...(body.messages as any[])];
   if (messages[0]?.role !== "system") {
     messages.unshift({
       role: "system",
@@ -537,12 +563,24 @@ app.post("/api/chat", async (req, res) => {
   const shouldCodex = mode === "codex" || (mode === "auto" && (isCodexOnlyHost(apiBase) || Boolean(cfgToml)));
   if (!apiBase && !shouldCodex) return res.status(400).json({ error: "ai_not_configured" });
   if (!apiBase && shouldCodex && !cfgToml) return res.status(400).json({ error: "ai_not_configured" });
+  if (hasImages && !apiBase) return res.status(400).json({ error: "image_requires_http" });
 
   const tryHttp = async () => {
     const urlResponses = `${apiBase}/responses`;
+    const input = messages.map((m: any) => {
+      const imgs = Array.isArray(m.images) ? m.images : null;
+      if (!imgs?.length) return { role: m.role, content: m.content };
+      return {
+        role: m.role,
+        content: [
+          { type: "input_text", text: m.content },
+          ...imgs.map((im: any) => ({ type: "input_image", image_url: String(im.dataUrl) })),
+        ],
+      };
+    });
     const payload = {
       model,
-      input: messages,
+      input,
       max_output_tokens: 800,
     };
 
@@ -567,10 +605,21 @@ app.post("/api/chat", async (req, res) => {
     // Fallback for OpenAI-compatible servers without /responses
     if (r1.res.status === 404 || r1.res.status === 405) {
       const urlChat = `${apiBase}/chat/completions`;
+      const chatMessages = messages.map((m: any) => {
+        const imgs = Array.isArray(m.images) ? m.images : null;
+        if (!imgs?.length) return { role: m.role, content: m.content };
+        return {
+          role: m.role,
+          content: [
+            { type: "text", text: m.content },
+            ...imgs.map((im: any) => ({ type: "image_url", image_url: { url: String(im.dataUrl) } })),
+          ],
+        };
+      });
       const r2 = await fetchJSON(urlChat, {
         apiKey: settings.apiKey,
         timeoutMs,
-        body: { model, messages, max_tokens: 800 },
+        body: { model, messages: chatMessages, max_tokens: 800 },
       });
       if (r2.res.ok && r2.json) {
         const content = (r2.json as any)?.choices?.[0]?.message?.content;
@@ -591,6 +640,7 @@ app.post("/api/chat", async (req, res) => {
   };
 
   const runCodex = async () => {
+    if (hasImages) throw new Error("images_not_supported_in_codex");
     const prompt = messagesToPrompt(messages);
 
     const tmpWork = fs.mkdtempSync(path.join(os.tmpdir(), "yablog_codex_work_"));
@@ -723,7 +773,10 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     let assistant = "";
-    if (shouldCodex) {
+    if (hasImages) {
+      // Vision requires HTTP (we send data URLs to OpenAI-compatible endpoints).
+      assistant = await tryHttp();
+    } else if (shouldCodex) {
       assistant = await runCodex();
     } else {
       try {
@@ -739,6 +792,9 @@ app.post("/api/chat", async (req, res) => {
     res.json({ assistant });
   } catch (e: any) {
     const raw = e?.message ?? String(e);
+    if (hasImages && (String(e?.code ?? "") === "CODEX_CLI_ONLY" || raw.includes("codex_cli_only"))) {
+      return res.status(400).json({ error: "image_requires_http" });
+    }
     // Avoid leaking upstream details in JSON; keep a short error.
     res.status(500).json({ error: "chat_failed", message: raw.slice(0, 300) });
   }

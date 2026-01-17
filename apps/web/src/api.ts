@@ -68,6 +68,8 @@ export type IpBan = {
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
+  // Optional image inputs (vision). Use data URLs (data:image/...;base64,...) to avoid server-side storage.
+  images?: { dataUrl: string; name?: string }[];
 };
 
 export type AiSettings = {
