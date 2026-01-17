@@ -1577,6 +1577,12 @@ app.use("/api/admin", adminRouter);
 if (config.webDistPath && fs.existsSync(config.webDistPath)) {
   const indexHtml = path.join(config.webDistPath, "index.html");
   app.use(express.static(config.webDistPath));
+  // If a static asset is missing, DO NOT fall back to `index.html` (otherwise browsers see
+  // `text/html` for `.css/.js` and CDNs may cache the HTML under `/assets/*`).
+  app.get(["/assets/*", "/uploads/*"], (_req, res) => {
+    res.setHeader("cache-control", "no-store");
+    return res.status(404).end();
+  });
   app.get("*", (req, res) => {
     if (req.path.startsWith("/api")) return res.status(404).json({ error: "not_found" });
     return res.sendFile(indexHtml);
