@@ -95,6 +95,27 @@ export function PostPage() {
   let headingCursor = 0;
   const nextHeadingId = () => toc[headingCursor++]?.id;
 
+  // Keep these derived values outside of conditional returns; otherwise React hooks order breaks.
+  const headerImage =
+    post?.coverImage ||
+    (site?.images.defaultPostCover && site.images.defaultPostCover.trim() ? site.images.defaultPostCover : "") ||
+    (post ? placeholderImageDataUrl(`postHeader:${post.id}`, post.title) : "");
+
+  const viewerItems = useMemo<ViewerItem[]>(() => {
+    if (!post) return headerImage ? [{ url: headerImage, name: "header" }] : [];
+    const items: ViewerItem[] = [];
+    if (headerImage) items.push({ url: headerImage, name: post.title });
+    for (const u of extractImageUrls(post.contentMd || "")) items.push({ url: u });
+    return items;
+  }, [headerImage, post?.contentMd, post?.title]);
+
+  const openViewerByUrl = (src: string) => {
+    if (!src) return;
+    const idx = viewerItems.findIndex((it) => it.url === src);
+    setViewerIndex(idx >= 0 ? idx : 0);
+    setViewerOpen(true);
+  };
+
   if (err) {
     return (
       <div className="container" style={{ padding: "100px 0" }}>
@@ -117,23 +138,6 @@ export function PostPage() {
       </div>
     );
   }
-
-  const headerImage =
-    post.coverImage ||
-    (site?.images.defaultPostCover && site.images.defaultPostCover.trim() ? site.images.defaultPostCover : "") ||
-    placeholderImageDataUrl(`postHeader:${post.id}`, post.title);
-
-  const viewerItems = useMemo<ViewerItem[]>(() => {
-    const items: ViewerItem[] = [{ url: headerImage, name: post.title }];
-    for (const u of extractImageUrls(post.contentMd || "")) items.push({ url: u });
-    return items;
-  }, [headerImage, post.contentMd, post.title]);
-
-  const openViewerByUrl = (src: string) => {
-    const idx = viewerItems.findIndex((it) => it.url === src);
-    setViewerIndex(idx >= 0 ? idx : 0);
-    setViewerOpen(true);
-  };
 
   return (
     <div className="butterfly-layout">
