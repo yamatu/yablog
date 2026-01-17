@@ -17,6 +17,10 @@ export function ImageViewer({
   index: number;
   onIndexChange: (next: number) => void;
 }) {
+  // Defensive: ensure we never leave a full-screen overlay mounted when closed.
+  // (If a Radix version changes presence behavior, a persistent overlay would "blank" the page.)
+  if (!open) return null;
+
   const safeItems = items.filter((it) => it && typeof it.url === "string" && it.url.trim());
   const i = Math.max(0, Math.min(index, Math.max(0, safeItems.length - 1)));
   const current = safeItems[i];
@@ -120,4 +124,3 @@ export function ImageViewer({
     </Dialog.Root>
   );
 }
-
