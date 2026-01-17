@@ -4,9 +4,10 @@ import { MdDateRange, MdLabel, MdFolder, MdRefresh, MdKeyboardArrowUp } from "re
 
 import { api, Captcha, Comment, Post } from "../api";
 import { Markdown } from "../components/Markdown";
-import { buildToc } from "../markdown";
+import { buildToc, extractImageUrls } from "../markdown";
 import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
+import { ImageViewer, type ViewerItem } from "../components/ImageViewer";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -32,6 +33,8 @@ export function PostPage() {
   const [submitOk, setSubmitOk] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showTop, setShowTop] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   useEffect(() => {
     if (!slug) return;
@@ -120,10 +123,37 @@ export function PostPage() {
     (site?.images.defaultPostCover && site.images.defaultPostCover.trim() ? site.images.defaultPostCover : "") ||
     placeholderImageDataUrl(`postHeader:${post.id}`, post.title);
 
+  const viewerItems = useMemo<ViewerItem[]>(() => {
+    const items: ViewerItem[] = [{ url: headerImage, name: post.title }];
+    for (const u of extractImageUrls(post.contentMd || "")) items.push({ url: u });
+    return items;
+  }, [headerImage, post.contentMd, post.title]);
+
+  const openViewerByUrl = (src: string) => {
+    const idx = viewerItems.findIndex((it) => it.url === src);
+    setViewerIndex(idx >= 0 ? idx : 0);
+    setViewerOpen(true);
+  };
+
   return (
     <div className="butterfly-layout">
+      <ImageViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        items={viewerItems}
+        index={viewerIndex}
+        onIndexChange={setViewerIndex}
+      />
       {/* Post Header */}
-      <div className="post-header" style={{ backgroundImage: `url(${headerImage})` }}>
+      <div
+        className="post-header"
+        style={{ backgroundImage: `url(${headerImage})`, cursor: "zoom-in" }}
+        title="点击放大查看"
+        onClick={() => {
+          setViewerIndex(0);
+          setViewerOpen(true);
+        }}
+      >
         <div className="post-header-overlay" />
         <div className="post-header-info">
           <h1 className="post-title">{post.title}</h1>
@@ -166,6 +196,7 @@ export function PostPage() {
           <div className="card markdown">
             <Markdown
               value={post.contentMd}
+              onImageClick={(src) => openViewerByUrl(src)}
               components={{
                 h1: ({ children }) => {
                   const id = nextHeadingId();

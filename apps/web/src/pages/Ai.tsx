@@ -25,6 +25,7 @@ import { Markdown } from "../components/Markdown";
 
 const STORAGE_INDEX_KEY = "yablog_ai_memories_v1";
 const STORAGE_PREFIX = "yablog_ai_memory_v1:";
+const STORAGE_RENDER_MD_KEY = "yablog_ai_render_md_v1";
 
 type UiImageMeta = { id: string; name: string; type: string; size: number; createdAt: number };
 type UiChatMessage = { role: "system" | "user" | "assistant"; content: string; images?: UiImageMeta[] };
@@ -140,6 +141,15 @@ export function AiPage() {
   const [index, setIndex] = useState<MemoryIndex>(() => loadIndex());
   const [messages, setMessages] = useState<UiChatMessage[]>(() => loadMessages(loadIndex().activeId));
   const [dirty, setDirty] = useState(false);
+  const [renderMd, setRenderMd] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_RENDER_MD_KEY);
+      if (v === "0") return false;
+    } catch {
+      // ignore
+    }
+    return true;
+  });
 
   const [input, setInput] = useState("");
   const [composerTab, setComposerTab] = useState<"edit" | "preview">("edit");
@@ -164,6 +174,14 @@ export function AiPage() {
       // ignore
     }
   }, [index]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_RENDER_MD_KEY, renderMd ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [renderMd]);
 
   useEffect(() => {
     setMessages(loadMessages(index.activeId));
@@ -500,6 +518,13 @@ export function AiPage() {
                   <Switch.Thumb className="aiSwitchThumb" />
                 </Switch.Root>
               </label>
+
+              <label className="aiAutoSave" title="关闭后将以纯文本展示（不渲染 Markdown/LaTeX）">
+                <span className="muted">Markdown</span>
+                <Switch.Root className="aiSwitch" checked={renderMd} onCheckedChange={(v) => setRenderMd(Boolean(v))}>
+                  <Switch.Thumb className="aiSwitchThumb" />
+                </Switch.Root>
+              </label>
             </div>
 
             <div className="aiHeaderRight">
@@ -522,7 +547,22 @@ export function AiPage() {
               <div key={idx} className={`chatRow ${m.role === "user" ? "chatRowUser" : "chatRowAssistant"}`}>
                 <div className={`chatBubble ${m.role === "user" ? "chatBubbleUser" : "chatBubbleAssistant"}`}>
                   <div className="markdown aiMarkdown" style={{ padding: 0, background: "transparent", border: 0 }}>
-                    <Markdown value={m.content} />
+                    {renderMd ? (
+                      <Markdown value={m.content} />
+                    ) : (
+                      <pre
+                        style={{
+                          margin: 0,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
+                          fontSize: 14,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {m.content}
+                      </pre>
+                    )}
                   </div>
                   {m.images?.length ? (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>

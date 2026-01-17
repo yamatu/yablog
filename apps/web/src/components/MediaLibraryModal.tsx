@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { MdClose, MdContentCopy, MdDelete, MdFileUpload, MdRefresh, MdSearch } from "react-icons/md";
+import { MdClose, MdContentCopy, MdDelete, MdFileUpload, MdRefresh, MdSearch, MdZoomOutMap } from "react-icons/md";
 
 import { api } from "../api";
+import { ImageViewer } from "./ImageViewer";
 
 type UploadItem = {
   name: string;
@@ -52,6 +53,8 @@ export function MediaLibraryPanel({
   const [dragOver, setDragOver] = useState(false);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [cfMsg, setCfMsg] = useState<string>("");
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   const refresh = async () => {
     setErr(null);
@@ -111,6 +114,10 @@ export function MediaLibraryPanel({
     return items.filter((it) => it.name.toLowerCase().includes(needle));
   }, [items, q]);
 
+  const viewerItems = useMemo(() => {
+    return filtered.map((it) => ({ url: withCacheBuster(it.url, it.updatedAt), name: it.name }));
+  }, [filtered]);
+
   useEffect(() => {
     setSelected((prev) => {
       if (!prev.size) return prev;
@@ -161,6 +168,14 @@ export function MediaLibraryPanel({
         await uploadFiles(files);
       }}
     >
+        <ImageViewer
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          items={viewerItems}
+          index={viewerIndex}
+          onIndexChange={setViewerIndex}
+        />
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>图库</div>
@@ -336,6 +351,31 @@ export function MediaLibraryPanel({
           {filtered.map((it) => (
             <div key={it.name} className="card" style={{ overflow: "hidden", padding: 0 }}>
               <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="pill"
+                  title="放大查看（可左右切换）"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const idx = filtered.findIndex((x) => x.name === it.name);
+                    setViewerIndex(Math.max(0, idx));
+                    setViewerOpen(true);
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    zIndex: 2,
+                    padding: 8,
+                    borderRadius: 10,
+                    background: "rgba(0,0,0,0.35)",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    color: "#fff",
+                  }}
+                >
+                  <MdZoomOutMap />
+                </button>
+
                 <button
                   onClick={() => {
                     onSelect(it.url);

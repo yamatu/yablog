@@ -67,3 +67,50 @@ export function buildToc(markdown: string): TocItem[] {
   return items;
 }
 
+export function extractImageUrls(markdown: string): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const lines = markdown.split("\n");
+  let inFence = false;
+  let fenceMarker: "```" | "~~~" | null = null;
+
+  const add = (raw: string) => {
+    const u = String(raw || "").trim();
+    if (!u) return;
+    const cleaned = u.replace(/^<|>$/g, "");
+    if (!cleaned) return;
+    if (seen.has(cleaned)) return;
+    seen.add(cleaned);
+    urls.push(cleaned);
+  };
+
+  for (const line of lines) {
+    const fence = line.match(/^\s*(```|~~~)/)?.[1] as "```" | "~~~" | undefined;
+    if (fence) {
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = fence;
+      } else if (fenceMarker === fence) {
+        inFence = false;
+        fenceMarker = null;
+      }
+      continue;
+    }
+    if (inFence) continue;
+
+    // Markdown image: ![alt](url "title")
+    for (const m of line.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
+      const inner = (m[1] ?? "").trim();
+      if (!inner) continue;
+      const first = inner.split(/\s+/)[0] ?? "";
+      add(first);
+    }
+
+    // HTML: <img src="...">
+    for (const m of line.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)) {
+      add(m[1] ?? "");
+    }
+  }
+
+  return urls;
+}

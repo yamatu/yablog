@@ -33,9 +33,11 @@ const parseSizing = (title?: string | null) => {
 export function Markdown({
   value,
   components,
+  onImageClick,
 }: {
   value: string;
   components?: Components;
+  onImageClick?: (src: string) => void;
 }) {
   const CodeBlock = ({
     className,
@@ -106,7 +108,9 @@ export function Markdown({
   const defaults: Components = {
     img: ({ style, title, ...props }) => {
       const { width, height } = parseSizing(title);
-      return (
+      const src = String((props as any)?.src ?? "");
+      const clickable = Boolean(onImageClick && src);
+      const img = (
         <img
           {...props}
           loading="lazy"
@@ -119,8 +123,20 @@ export function Markdown({
             ...(style as any),
             ...(width ? { width } : null),
             ...(height ? { height } : null),
+            ...(clickable ? { cursor: "zoom-in" } : null),
           }}
         />
+      );
+      if (!clickable) return img;
+      return (
+        <button
+          type="button"
+          title="点击放大"
+          onClick={() => onImageClick?.(src)}
+          style={{ padding: 0, border: "none", background: "transparent", width: "100%" }}
+        >
+          {img}
+        </button>
       );
     },
     pre: ({ children }) => <>{children}</>,

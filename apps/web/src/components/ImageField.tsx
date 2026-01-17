@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { MdCollections, MdFileUpload, MdRefresh } from "react-icons/md";
 
 import { api } from "../api";
+import { ImageViewer } from "./ImageViewer";
 import { MediaLibraryModal } from "./MediaLibraryModal";
 
 const uploadsNameFromUrl = (value: string) => {
@@ -34,6 +35,7 @@ export function ImageField({
   const [err, setErr] = useState<string | null>(null);
   const [previewBust, setPreviewBust] = useState(0);
   const [progress, setProgress] = useState<number | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   const replaceName = useMemo(() => uploadsNameFromUrl(value), [value]);
   const previewUrl = useMemo(() => {
@@ -152,9 +154,24 @@ export function ImageField({
 
       {value ? (
         <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
-          <img src={previewUrl} alt={label} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+          <button
+            type="button"
+            title="点击放大"
+            onClick={() => setViewerOpen(true)}
+            style={{ padding: 0, border: "none", background: "transparent", width: "100%", cursor: "zoom-in" }}
+          >
+            <img src={previewUrl} alt={label} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+          </button>
         </div>
       ) : null}
+
+      <ImageViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        items={value ? [{ url: previewUrl, name: label }] : []}
+        index={0}
+        onIndexChange={() => {}}
+      />
 
       <MediaLibraryModal
         open={pickerOpen}
