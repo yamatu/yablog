@@ -403,8 +403,8 @@ export function AiPage() {
         </div>
       </div>
 
-      <div className="container" style={{ paddingTop: 20, paddingBottom: 22, flex: "1 1 auto", minHeight: 0 }}>
-        <div className="card chatCard aiCard" style={{ flex: "1 1 auto", minHeight: 0 }}>
+      <div className="aiMain container">
+        <div className="card chatCard aiCard">
           <div className="aiHeader">
             <div className="aiHeaderLeft">
               <DropdownMenu.Root>

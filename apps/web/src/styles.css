@@ -1479,6 +1479,19 @@ button:hover,
     var(--bg);
 }
 
+.aiMain {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 20px;
+  padding-bottom: 22px;
+  display: flex;
+}
+
+.aiMain .chatCard {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .aiHero {
   padding: 92px 0 26px;
   position: relative;
@@ -1526,6 +1539,7 @@ button:hover,
 
 .chatCard {
   max-width: min(1100px, 100%);
+  width: 100%;
   margin: 0 auto;
   overflow: hidden;
   display: flex;
