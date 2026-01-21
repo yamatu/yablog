@@ -1488,6 +1488,13 @@ button:hover,
   display: flex;
 }
 
+@media (max-width: 520px) {
+  .aiMain {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+}
+
 .aiMain .chatCard {
   flex: 1 1 auto;
   min-height: 0;
@@ -1539,7 +1546,7 @@ button:hover,
 }
 
 .chatCard {
-  max-width: min(1100px, 100%);
+  max-width: min(var(--max), 100%);
   width: 100%;
   margin: 0 auto;
   overflow: hidden;
@@ -1839,9 +1846,10 @@ button:hover,
   .aiHeroTitle {
     font-size: 2.0rem;
   }
-  .chatMessages {
+  /* AI page: keep a single scroll area (chatMessages), avoid vh-based clamps on mobile. */
+  .aiPage .chatMessages {
     padding: 12px;
-    max-height: min(65vh, 640px);
+    max-height: none;
   }
   .chatBubble {
     max-width: 100%;
