@@ -1472,6 +1472,7 @@ button:hover,
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding-top: 0;
   background:
     radial-gradient(1000px 420px at 20% -10%, rgba(73, 177, 245, 0.26), transparent 55%),
     radial-gradient(800px 420px at 80% 0%, rgba(255, 114, 66, 0.18), transparent 60%),
@@ -1493,7 +1494,7 @@ button:hover,
 }
 
 .aiHero {
-  padding: 92px 0 26px;
+  padding: 56px 0 26px;
   position: relative;
   overflow: hidden;
   flex: 0 0 auto;

@@ -32,6 +32,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   // Check if we are in admin section
   const isAdmin = location.pathname.startsWith("/admin");
+  const isAi = location.pathname === "/ai";
 
   useEffect(() => {
     const t = getSavedTheme() ?? getSystemTheme();
@@ -74,8 +75,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // If admin, render just children (admin pages have their own layout)
-  if (isAdmin) {
+  // Admin & AI pages have their own layout
+  if (isAdmin || isAi) {
     return <>{children}</>;
   }
 
