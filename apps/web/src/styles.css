@@ -1467,6 +1467,11 @@ button:hover,
 /* AI Chat */
 .aiPage {
   min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(1000px 420px at 20% -10%, rgba(73, 177, 245, 0.26), transparent 55%),
     radial-gradient(800px 420px at 80% 0%, rgba(255, 114, 66, 0.18), transparent 60%),
@@ -1478,6 +1483,7 @@ button:hover,
   padding: 92px 0 26px;
   position: relative;
   overflow: hidden;
+  flex: 0 0 auto;
 }
 
 .aiHero::before {
@@ -1522,6 +1528,8 @@ button:hover,
   max-width: min(1100px, 100%);
   margin: 0 auto;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .aiCard {
@@ -1614,7 +1622,8 @@ button:hover,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: min(62vh, 720px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   background: color-mix(in oklab, var(--bg2) 55%, transparent);
