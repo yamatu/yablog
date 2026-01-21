@@ -468,9 +468,10 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // Conservative defaults (still allows CDN caching, but reduces staleness).
+  // Safe default: never cache HTML. Only allow short caching for public GET APIs.
+  // If a CDN caches HTML while /assets uses hashed filenames, stale HTML can reference missing assets -> white screen.
   if (p.startsWith("/api/")) setShortCache(res, 10);
-  else setShortCache(res, 30);
+  else setNoStore(res);
   return next();
 });
 
