@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useLoaderData } from "react-router-dom";
 import { MdDateRange, MdLabel, MdFolder, MdRefresh, MdKeyboardArrowUp } from "react-icons/md";
 
 import { api, Captcha, Comment, Post } from "../api";
@@ -9,6 +9,7 @@ import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
 import { ImageViewer, type ViewerItem } from "../components/ImageViewer";
 import { LoadingCenter } from "../components/Loading";
+import type { PostLoaderData } from "../loaders";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -17,18 +18,23 @@ function formatDate(iso: string | null) {
 }
 
 export function PostPage() {
-  const { slug } = useParams();
+  const { slug, post, comments: initialComments } = useLoaderData() as PostLoaderData;
   const { site } = useSite();
-  const [post, setPost] = useState<Post | null>(null);
-  const [err, setErr] = useState<string | null>(null);
 
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<Comment[]>(initialComments);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsErr, setCommentsErr] = useState<string | null>(null);
 
   const [captcha, setCaptcha] = useState<Captcha | null>(null);
   const [captchaAnswer, setCaptchaAnswer] = useState("");
-  const [author, setAuthor] = useState(() => localStorage.getItem("yablog_comment_author") ?? "");
+  const [author, setAuthor] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return localStorage.getItem("yablog_comment_author") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [contentMd, setContentMd] = useState("");
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
@@ -36,24 +42,6 @@ export function PostPage() {
   const [showTop, setShowTop] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
-
-  useEffect(() => {
-    if (!slug) return;
-    let alive = true;
-    (async () => {
-      try {
-        const res = await api.getPost(slug);
-        if (!alive) return;
-        setPost(res.post);
-      } catch (e: any) {
-        if (!alive) return;
-        setErr(e?.message ?? String(e));
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [slug]);
 
   const refreshCaptcha = useCallback(async () => {
     try {
@@ -65,8 +53,16 @@ export function PostPage() {
     }
   }, []);
 
+  // When navigating between different slugs, the loader provides new data but the component can stay mounted.
+  useEffect(() => {
+    setComments(initialComments);
+    setCommentsErr(null);
+    setCommentsLoading(false);
+    // Captcha is POST based; refresh per post.
+    refreshCaptcha();
+  }, [slug, initialComments, refreshCaptcha]);
+
   const loadComments = useCallback(async () => {
-    if (!slug) return;
     setCommentsLoading(true);
     setCommentsErr(null);
     try {
@@ -80,31 +76,24 @@ export function PostPage() {
   }, [slug]);
 
   useEffect(() => {
-    if (!slug) return;
-    refreshCaptcha();
-    loadComments();
-  }, [slug, refreshCaptcha, loadComments]);
-
-  useEffect(() => {
     const onScroll = () => setShowTop(window.scrollY > 600);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const toc = useMemo(() => post ? buildToc(post.contentMd) : [], [post]);
+  const toc = useMemo(() => buildToc(post.contentMd), [post.contentMd]);
   let headingCursor = 0;
   const nextHeadingId = () => toc[headingCursor++]?.id;
 
   // Keep these derived values outside of conditional returns; otherwise React hooks order breaks.
   const headerImage =
-    post?.coverImage ||
+    post.coverImage ||
     (site?.images.defaultPostCover && site.images.defaultPostCover.trim() ? site.images.defaultPostCover : "") ||
-    (post ? placeholderImageDataUrl(`postHeader:${post.id}`, post.title) : "");
+    placeholderImageDataUrl(`postHeader:${post.id}`, post.title);
 
   const viewerItems = useMemo<ViewerItem[]>(() => {
     // Only include images from the article body; the header image is a banner and should not be clickable.
-    if (!post) return [];
     const cover = (post.coverImage ?? "").trim();
     const items: ViewerItem[] = [];
     for (const u of extractImageUrls(post.contentMd || "")) {
@@ -113,7 +102,7 @@ export function PostPage() {
       items.push({ url: u });
     }
     return items;
-  }, [post?.contentMd, post?.coverImage]);
+  }, [post.contentMd, post.coverImage]);
 
   const openViewerByUrl = (src: string) => {
     if (!src) return;
@@ -122,24 +111,11 @@ export function PostPage() {
     setViewerOpen(true);
   };
 
-  if (err) {
-    return (
-      <div className="container" style={{ padding: "100px 0" }}>
-        <div className="card content">
-          <h2 style={{ marginTop: 0 }}>Create 404</h2>
-          <div className="muted">{err}</div>
-          <div style={{ height: 14 }} />
-          <Link to="/" className="muted">
-            Back Home
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
+  // With Data Router loaders, the route element renders after data is ready.
+  // Keep a tiny fallback for SSR/edge cases.
   if (!post) {
     return (
-      <div className="butterfly-hero" style={{ height: '40vh' }}>
+      <div className="butterfly-hero" style={{ height: "40vh" }}>
         <div className="hero-content">
           <LoadingCenter label="加载文章中…" minHeight={120} />
         </div>

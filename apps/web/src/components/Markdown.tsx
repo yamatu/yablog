@@ -42,22 +42,15 @@ export function Markdown({
   // Allow callers to opt-out specific images (e.g. post cover/banner).
   isImageClickable?: (src: string) => boolean;
 }) {
-  const CodeBlock = ({
-    className,
-    children,
-    inline,
-  }: {
-    className?: string;
-    children?: any;
-    inline?: boolean;
-  }) => {
+  const InlineCode = ({ className, children }: { className?: string; children?: any }) => {
     const raw = String(children ?? "");
     const text = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
+    return <code className={`inlineCode ${className ?? ""}`.trim()}>{text}</code>;
+  };
 
-    if (inline) {
-      return <code className={`inlineCode ${className ?? ""}`.trim()}>{text}</code>;
-    }
-
+  const FencedCodeBlock = ({ className, children }: { className?: string; children?: any }) => {
+    const raw = String(children ?? "");
+    const text = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
     const lang = (className ?? "").match(/language-([\w-]+)/i)?.[1] ?? "";
     const [copied, setCopied] = useState(false);
     const preRef = useRef<HTMLPreElement | null>(null);
@@ -108,6 +101,22 @@ export function Markdown({
     );
   };
 
+  const Code = ({
+    className,
+    children,
+    inline,
+  }: {
+    className?: string;
+    children?: any;
+    inline?: boolean;
+  }) => {
+    return inline ? (
+      <InlineCode className={className}>{children}</InlineCode>
+    ) : (
+      <FencedCodeBlock className={className}>{children}</FencedCodeBlock>
+    );
+  };
+
   const defaults: Components = {
     img: ({ style, title, ...props }) => {
       const { width, height } = parseSizing(title);
@@ -143,7 +152,7 @@ export function Markdown({
       );
     },
     pre: ({ children }) => <>{children}</>,
-    code: (props: any) => <CodeBlock {...props} />,
+    code: (props: any) => <Code {...props} />,
   };
 
   return (

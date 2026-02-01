@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { useLoaderData } from "react-router-dom";
 import { MdKeyboardArrowDown } from "react-icons/md";
 
 import { api, Post } from "../api";
@@ -8,41 +8,20 @@ import { Sidebar } from "../components/Sidebar";
 import { LoadingOverlay } from "../components/Loading";
 import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
+import type { HomeLoaderData } from "../loaders";
 
 export function HomePage() {
   const { site } = useSite();
-  const [pinned, setPinned] = useState<Post[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const limit = 10;
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const p = await api.listPosts({ pinned: true, limit: 3 });
-        const l = await api.listPosts({ featured: false, page: 1, limit });
-        if (!alive) return;
-        setPinned(p.items);
-        setPosts(l.items);
-        setTotal(l.total);
-        setPage(1);
-      } catch (e: any) {
-        if (!alive) return;
-        setErr(e?.message ?? String(e));
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const { pinned: initialPinned, posts: initialPosts, total: initialTotal, limit } =
+    useLoaderData() as HomeLoaderData;
+
+  const [pinned] = useState<Post[]>(initialPinned);
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(initialTotal);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const scrollToContent = () => {
     document.getElementById("content")?.scrollIntoView({ behavior: "smooth" });

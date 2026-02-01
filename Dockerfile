@@ -24,11 +24,14 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git \
   && rm -rf /var/lib/apt/lists/*
 
-# Install only production dependencies (avoid copying huge dev/web deps into the runtime image).
+# Install production dependencies.
+# NOTE: SSR runs inside the API process and imports the Vite SSR bundle from `apps/web/dist/ssr`.
+# That bundle depends on `@yablog/web` runtime deps (react/react-router-dom/etc.), so we must
+# install production deps for both workspaces.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
-RUN npm ci -w @yablog/api --omit=dev
+RUN npm ci -w @yablog/api -w @yablog/web --omit=dev
 
 # Install Codex CLI globally so `spawn("codex", ...)` works inside the container.
 ENV NPM_CONFIG_FUND=false \

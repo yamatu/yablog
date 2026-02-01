@@ -76,9 +76,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Admin & AI pages have their own layout
-  if (isAdmin || isAi) {
-    return <>{children}</>;
-  }
+  const showChrome = !(isAdmin || isAi);
 
   const iconFor = (key: string) => {
     const k = (key || "").toLowerCase();
@@ -115,6 +113,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Update favicon (client-side) without rebuild
+    if (!showChrome) return;
     if (!faviconUrl) return;
     const head = document.head;
     const links = Array.from(head.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]'));
@@ -122,17 +121,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
     link.rel = "icon";
     link.href = faviconUrl;
     if (!links[0]) head.appendChild(link);
-  }, [faviconUrl]);
+  }, [faviconUrl, showChrome]);
 
   useEffect(() => {
+    if (!showChrome) return;
     // Set default title on navigation when visible
     if (document.visibilityState === "visible") {
       document.title = tabTitle;
       lastVisibleTitleRef.current = tabTitle;
     }
-  }, [location.pathname, tabTitle]);
+  }, [location.pathname, tabTitle, showChrome]);
 
   useEffect(() => {
+    if (!showChrome) return;
     const onVis = () => {
       if (document.visibilityState === "hidden") {
         lastVisibleTitleRef.current = document.title || tabTitle;
@@ -143,7 +144,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [awayTitle, tabTitle]);
+  }, [awayTitle, tabTitle, showChrome]);
+
+  // Admin & AI pages have their own layout
+  if (!showChrome) {
+    return <>{children}</>;
+  }
 
   return (
     <>

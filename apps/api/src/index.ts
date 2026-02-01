@@ -7,6 +7,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import multer from "multer";
@@ -30,6 +31,7 @@ import {
   getUserById,
   hasAnyUsers,
   initDb,
+  listPosts,
   listIpBans,
   migrateDb,
   openDb,
@@ -830,6 +832,53 @@ const publicRouter = express.Router();
 mountPublicRoutes(publicRouter, db, cache);
 app.use("/api", publicRouter);
 
+// SEO helpers
+app.get("/robots.txt", (req, res) => {
+  const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "localhost").split(",")[0].trim();
+  const origin = `${proto}://${host}`;
+  res.setHeader("content-type", "text/plain; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  return res.send(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
+});
+
+app.get("/sitemap.xml", (req, res) => {
+  const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "localhost").split(",")[0].trim();
+  const origin = `${proto}://${host}`;
+
+  const esc = (s: string) =>
+    s
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&apos;");
+
+  const { items } = listPosts(db, { includeDrafts: false, page: 1, limit: 5000 });
+
+  const urls: string[] = [];
+  urls.push(
+    `<url><loc>${esc(origin + "/")}</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+  );
+  for (const p of items) {
+    const loc = `${origin}/post/${encodeURIComponent(p.slug)}`;
+    const lastmod = new Date(p.updatedAt || p.publishedAt || p.createdAt).toISOString();
+    urls.push(
+      `<url><loc>${esc(loc)}</loc><lastmod>${esc(lastmod)}</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>`,
+    );
+  }
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+    urls.join("") +
+    `</urlset>`;
+
+  res.setHeader("content-type", "application/xml; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  return res.send(xml);
+});
+
 // Serve uploaded images from the DB directory volume (with optional hotlink protection)
 app.use("/uploads", (req, res, next) => {
   const hotlink = siteCache.security?.hotlink;
@@ -1577,16 +1626,91 @@ app.use("/api/admin", adminRouter);
 
 if (config.webDistPath && fs.existsSync(config.webDistPath)) {
   const indexHtml = path.join(config.webDistPath, "index.html");
-  app.use(express.static(config.webDistPath));
+  const ssrEntry = path.join(config.webDistPath, "ssr", "entry-server.js");
+
+  const readTemplate = () => fs.readFileSync(indexHtml, "utf-8");
+  const escapeInlineJson = (s: string) => s.replaceAll("</script", "<\\/script");
+
+  let ssrRender: null | ((url: string, opts?: { headers?: Record<string, string> }) => Promise<any>) = null;
+  if (fs.existsSync(ssrEntry)) {
+    try {
+      const mod: any = await import(pathToFileURL(ssrEntry).toString());
+      if (typeof mod?.render === "function") ssrRender = mod.render;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("[yablog-api] SSR entry load failed:", e);
+      ssrRender = null;
+    }
+  }
+
+  // Disable directory index so `/` falls through to our SSR/SPA handler.
+  app.use(express.static(config.webDistPath, { index: false }));
   // If a static asset is missing, DO NOT fall back to `index.html` (otherwise browsers see
   // `text/html` for `.css/.js` and CDNs may cache the HTML under `/assets/*`).
   app.get(["/assets/*", "/uploads/*"], (_req, res) => {
     res.setHeader("cache-control", "no-store");
     return res.status(404).end();
   });
-  app.get("*", (req, res) => {
+  app.get("*", async (req, res) => {
     if (req.path.startsWith("/api")) return res.status(404).json({ error: "not_found" });
-    return res.sendFile(indexHtml);
+
+    const shouldSsr =
+      !!ssrRender && (req.path === "/" || req.path.startsWith("/post/"));
+
+    if (!shouldSsr) {
+      return res.sendFile(indexHtml);
+    }
+
+    try {
+      // Prefer reverse-proxy headers when present.
+      const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http")
+        .split(",")[0]
+        .trim();
+      const host = String(req.headers["x-forwarded-host"] || req.headers.host || "localhost")
+        .split(",")[0]
+        .trim();
+      const fullUrl = `${proto}://${host}${req.originalUrl}`;
+
+      const result = await ssrRender!(fullUrl, {
+        headers: {
+          cookie: req.headers.cookie ? String(req.headers.cookie) : "",
+          "user-agent": req.headers["user-agent"] ? String(req.headers["user-agent"]) : "",
+        },
+      });
+
+      if (result?.type === "response") {
+        const location = result?.response?.headers?.get?.("location") ?? null;
+        const status = Number(result?.response?.status ?? 500);
+        if (location && status >= 300 && status < 400) {
+          return res.redirect(status, location);
+        }
+        const body = await result.response.text();
+        return res.status(status).send(body);
+      }
+
+      let html = readTemplate();
+      // Remove existing <title> to avoid duplicates
+      html = html.replace(/<title>[\s\S]*?<\/title>/i, "");
+      // Inject SSR head tags
+      if (typeof result?.headTags === "string" && result.headTags.trim()) {
+        html = html.replace("</head>", `${result.headTags}\n</head>`);
+      }
+
+      const hydrationJson = escapeInlineJson(JSON.stringify(result.hydrationData ?? null));
+      const hydrationScript = `<script>window.__staticRouterHydrationData = ${hydrationJson};</script>`;
+
+      html = html.replace(
+        '<div id="root"></div>',
+        `<div id="root" data-ssr="1">${result.appHtml ?? ""}</div>\n${hydrationScript}`,
+      );
+
+      res.setHeader("content-type", "text/html; charset=utf-8");
+      return res.status(200).send(html);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[yablog-api] SSR render failed:", e);
+      return res.sendFile(indexHtml);
+    }
   });
 }
 

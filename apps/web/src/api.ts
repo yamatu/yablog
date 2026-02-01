@@ -158,8 +158,49 @@ export type PostUpsertPayload = {
   publishedAt?: string | null;
 };
 
-async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, { ...init, credentials: "include" });
+export type ApiClientOptions = {
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+};
+
+function defaultApiBaseUrl() {
+  // In the browser we prefer same-origin (/api) so Vite dev proxy & reverse proxies work.
+  // In SSR (Node) we need an absolute origin.
+  if (!import.meta.env.SSR) return "";
+  const fromProcess = (globalThis as any)?.process?.env?.VITE_API_ORIGIN;
+  const fromVite = (import.meta as any)?.env?.VITE_API_ORIGIN;
+  return String(fromProcess || fromVite || "http://localhost:8787").trim();
+}
+
+function buildUrl(path: string, params?: Record<string, unknown>) {
+  const usp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v === undefined || v === null || v === "") continue;
+    usp.set(k, String(v));
+  }
+  const qs = usp.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+function resolveUrl(baseUrl: string, input: string | URL) {
+  if (input instanceof URL) return input.toString();
+  if (/^https?:\/\//i.test(input)) return input;
+  const base = (baseUrl ?? "").replace(/\/$/, "");
+  if (!base) return input;
+  return `${base}${input.startsWith("/") ? "" : "/"}${input}`;
+}
+
+async function json<T>(
+  fetchImpl: typeof fetch,
+  baseUrl: string,
+  input: string | URL,
+  init?: RequestInit,
+): Promise<T> {
+  const url = resolveUrl(baseUrl, input);
+  const res = await fetchImpl(url, {
+    ...init,
+    credentials: init?.credentials ?? "include",
+  });
   if (!res.ok) {
     const contentType = res.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
@@ -193,6 +234,7 @@ function parseApiError(payload: any, status: number) {
 }
 
 async function xhrJson<T>(
+  baseUrl: string,
   url: string,
   opts: {
     method: "POST" | "PUT" | "PATCH" | "DELETE";
@@ -203,7 +245,7 @@ async function xhrJson<T>(
 ): Promise<T> {
   return await new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open(opts.method, url, true);
+    xhr.open(opts.method, resolveUrl(baseUrl, url), true);
     xhr.withCredentials = true;
     for (const [k, v] of Object.entries(opts.headers ?? {})) xhr.setRequestHeader(k, v);
     if (opts.onProgress) {
@@ -236,28 +278,30 @@ async function xhrJson<T>(
   });
 }
 
-export const api = {
-  health: () => json<{ ok: true }>("/api/health"),
+export function createApiClient(opts?: ApiClientOptions) {
+  const baseUrl = (opts?.baseUrl ?? defaultApiBaseUrl()).trim();
+  const fetchImpl = opts?.fetchImpl ?? (globalThis.fetch as typeof fetch);
+
+  const j = <T,>(input: string | URL, init?: RequestInit) => json<T>(fetchImpl, baseUrl, input, init);
+  const x = <T,>(url: string, o: Parameters<typeof xhrJson<T>>[2]) => xhrJson<T>(baseUrl, url, o);
+
+  return {
+    health: () => j<{ ok: true }>("/api/health"),
 
   // Use POST to avoid aggressive CDN caching (e.g. Cloudflare "Cache Everything").
-  captcha: () => json<Captcha>("/api/captcha", { method: "POST" }),
+    // Use POST to avoid aggressive CDN caching (e.g. Cloudflare "Cache Everything").
+    captcha: () => j<Captcha>("/api/captcha", { method: "POST" }),
 
-  search: (args: { q: string; page?: number; limit?: number }) => {
-    const url = new URL("/api/search", window.location.origin);
-    for (const [k, v] of Object.entries(args)) {
-      if (v === undefined || v === null || v === "") continue;
-      url.searchParams.set(k, String(v));
-    }
-    return json<{
-      items: Post[];
-      total: number;
-      page: number;
-      limit: number;
-      recommendations: Post[];
-    }>(url);
-  },
+    search: (args: { q: string; page?: number; limit?: number }) =>
+      j<{
+        items: Post[];
+        total: number;
+        page: number;
+        limit: number;
+        recommendations: Post[];
+      }>(buildUrl("/api/search", args)),
 
-  listPosts: (args: {
+    listPosts: (args: {
     page?: number;
     limit?: number;
     q?: string;
@@ -265,37 +309,30 @@ export const api = {
     category?: string;
     featured?: boolean;
     pinned?: boolean;
-  }) => {
-    const url = new URL("/api/posts", window.location.origin);
-    for (const [k, v] of Object.entries(args)) {
-      if (v === undefined || v === null || v === "") continue;
-      url.searchParams.set(k, String(v));
-    }
-    return json<{ items: Post[]; total: number; page: number; limit: number }>(url);
-  },
+    }) => j<{ items: Post[]; total: number; page: number; limit: number }>(buildUrl("/api/posts", args)),
 
-  getPost: (slug: string) => json<{ post: Post }>(`/api/posts/${encodeURIComponent(slug)}`),
+    getPost: (slug: string) => j<{ post: Post }>(`/api/posts/${encodeURIComponent(slug)}`),
 
-  listPostComments: (slug: string) =>
-    json<{ items: Comment[]; total: number }>(`/api/posts/${encodeURIComponent(slug)}/comments`),
+    listPostComments: (slug: string) =>
+      j<{ items: Comment[]; total: number }>(`/api/posts/${encodeURIComponent(slug)}/comments`),
 
-  createPostComment: (
+    createPostComment: (
     slug: string,
     payload: { author: string; contentMd: string; captchaId: string; captchaAnswer: string },
   ) =>
-    json<{ ok: true; id: number; status: "pending" }>(`/api/posts/${encodeURIComponent(slug)}/comments`, {
+      j<{ ok: true; id: number; status: "pending" }>(`/api/posts/${encodeURIComponent(slug)}/comments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  listTags: () => json<{ items: string[] }>("/api/tags"),
-  listCategories: () => json<{ items: { name: string; slug: string }[] }>("/api/categories"),
+    listTags: () => j<{ items: string[] }>("/api/tags"),
+    listCategories: () => j<{ items: { name: string; slug: string }[] }>("/api/categories"),
 
-  listLinks: () => json<{ items: Link[] }>("/api/links"),
-  listLinkRequests: () => json<{ items: LinkRequest[] }>("/api/links/requests"),
+    listLinks: () => j<{ items: Link[] }>("/api/links"),
+    listLinkRequests: () => j<{ items: LinkRequest[] }>("/api/links/requests"),
 
-  createLinkRequest: (payload: {
+    createLinkRequest: (payload: {
     name: string;
     url: string;
     description?: string;
@@ -303,14 +340,14 @@ export const api = {
     captchaId: string;
     captchaAnswer: string;
   }) =>
-    json<{ ok: true; id: number; status: "pending" }>("/api/links/requests", {
+      j<{ ok: true; id: number; status: "pending" }>("/api/links/requests", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  login: (args: { username: string; password: string }) =>
-    json<{ ok: true; user: { id: number; username: string; createdAt: string } }>(
+    login: (args: { username: string; password: string }) =>
+      j<{ ok: true; user: { id: number; username: string; createdAt: string } }>(
       "/api/auth/login",
       {
         method: "POST",
@@ -319,118 +356,110 @@ export const api = {
       },
     ),
 
-  logout: () => json<{ ok: true }>("/api/auth/logout", { method: "POST" }),
-  me: () => json<{ user: User }>("/api/auth/me"),
+    logout: () => j<{ ok: true }>("/api/auth/logout", { method: "POST" }),
+    me: () => j<{ user: User }>("/api/auth/me"),
 
-  site: () => json<{ site: SiteSettings }>("/api/site"),
-  about: () => json<{ about: SiteSettings["about"]; heroImage: string }>("/api/about"),
-  chat: (args: { messages: ChatMessage[] }) =>
-    json<{ assistant: string }>("/api/chat", {
+    site: () => j<{ site: SiteSettings }>("/api/site"),
+    about: () => j<{ about: SiteSettings["about"]; heroImage: string }>("/api/about"),
+    chat: (args: { messages: ChatMessage[] }) =>
+      j<{ assistant: string }>("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(args),
-    }),
+      }),
 
-  adminListPosts: (args: { page?: number; limit?: number; q?: string; status?: string }) => {
-    const url = new URL("/api/admin/posts", window.location.origin);
-    for (const [k, v] of Object.entries(args)) {
-      if (!v) continue;
-      url.searchParams.set(k, String(v));
-    }
-    return json<{ items: Post[]; total: number; page: number; limit: number }>(url);
-  },
+    adminListPosts: (args: { page?: number; limit?: number; q?: string; status?: string }) =>
+      j<{ items: Post[]; total: number; page: number; limit: number }>(buildUrl("/api/admin/posts", args)),
 
-  adminCreatePost: (payload: PostUpsertPayload) =>
-    json<{ id: number; slug: string }>("/api/admin/posts", {
+    adminCreatePost: (payload: PostUpsertPayload) =>
+      j<{ id: number; slug: string }>("/api/admin/posts", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminUpdatePost: (id: number, payload: PostUpsertPayload) =>
-    json<{ ok: true; slug: string }>(`/api/admin/posts/${id}`, {
+    adminUpdatePost: (id: number, payload: PostUpsertPayload) =>
+      j<{ ok: true; slug: string }>(`/api/admin/posts/${id}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminDeletePost: (id: number) =>
-    json<{ ok: true }>(`/api/admin/posts/${id}`, { method: "DELETE" }),
+    adminDeletePost: (id: number) => j<{ ok: true }>(`/api/admin/posts/${id}`, { method: "DELETE" }),
 
-  adminUpdateAccount: (payload: {
+    adminUpdateAccount: (payload: {
     currentPassword: string;
     newUsername?: string;
     newPassword?: string;
   }) =>
-    json<{ ok: true; user: User }>("/api/admin/account", {
+      j<{ ok: true; user: User }>("/api/admin/account", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminRestoreBackup: (file: File) => {
+    adminRestoreBackup: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return json<{ ok: true; restarting: boolean }>("/api/admin/restore", {
+      return j<{ ok: true; restarting: boolean }>("/api/admin/restore", {
       method: "POST",
       body: fd,
     });
   },
 
-  adminRestoreFullBackup: (file: File) => {
+    adminRestoreFullBackup: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return json<{ ok: true; restarting: boolean }>("/api/admin/restore/full", {
+      return j<{ ok: true; restarting: boolean }>("/api/admin/restore/full", {
       method: "POST",
       body: fd,
     });
   },
 
-  adminGetSite: () => json<{ site: SiteSettings }>("/api/admin/site"),
-  adminUpdateSite: (site: SiteSettings) =>
-    json<{ ok: true }>("/api/admin/site", {
+    adminGetSite: () => j<{ site: SiteSettings }>("/api/admin/site"),
+    adminUpdateSite: (site: SiteSettings) =>
+      j<{ ok: true }>("/api/admin/site", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ site }),
-    }),
+      }),
 
-  adminGetAi: () => json<{ ai: AiSettings }>("/api/admin/ai"),
-  adminUpdateAi: (ai: AiSettings) =>
-    json<{ ok: true }>("/api/admin/ai", {
+    adminGetAi: () => j<{ ai: AiSettings }>("/api/admin/ai"),
+    adminUpdateAi: (ai: AiSettings) =>
+      j<{ ok: true }>("/api/admin/ai", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ai }),
-    }),
+      }),
 
-  adminGetCloudflare: () => json<{ cloudflare: CloudflareSettings }>("/api/admin/cloudflare"),
-  adminUpdateCloudflare: (cloudflare: CloudflareSettings) =>
-    json<{ ok: true }>("/api/admin/cloudflare", {
+    adminGetCloudflare: () => j<{ cloudflare: CloudflareSettings }>("/api/admin/cloudflare"),
+    adminUpdateCloudflare: (cloudflare: CloudflareSettings) =>
+      j<{ ok: true }>("/api/admin/cloudflare", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ cloudflare }),
-    }),
-  adminCloudflarePurge: () => json<{ ok: true }>("/api/admin/cloudflare/purge", { method: "POST" }),
+      }),
+    adminCloudflarePurge: () => j<{ ok: true }>("/api/admin/cloudflare/purge", { method: "POST" }),
 
-  adminUploadImage: (file: File, opts?: { replace?: string; onProgress?: (p: { loaded: number; total: number; percent: number }) => void }) => {
+    adminUploadImage: (file: File, opts?: { replace?: string; onProgress?: (p: { loaded: number; total: number; percent: number }) => void }) => {
     const fd = new FormData();
     fd.append("file", file);
-    const url = new URL("/api/admin/upload", window.location.origin);
-    if (opts?.replace) url.searchParams.set("replace", opts.replace);
-    return xhrJson<{ ok: true; url: string }>(url.toString(), { method: "POST", body: fd, onProgress: opts?.onProgress });
+      const url = buildUrl("/api/admin/upload", opts?.replace ? { replace: opts.replace } : undefined);
+      return x<{ ok: true; url: string }>(url, { method: "POST", body: fd, onProgress: opts?.onProgress });
   },
 
-  adminUploadImages: (files: File[], opts?: { onProgress?: (p: { loaded: number; total: number; percent: number }) => void }) => {
+    adminUploadImages: (files: File[], opts?: { onProgress?: (p: { loaded: number; total: number; percent: number }) => void }) => {
     const fd = new FormData();
     for (const f of files) fd.append("files", f);
-    return xhrJson<{ ok: true; urls: string[]; failed: { name: string; error: string }[] }>(`/api/admin/upload/batch`, {
+      return x<{ ok: true; urls: string[]; failed: { name: string; error: string }[] }>(`/api/admin/upload/batch`, {
       method: "POST",
       body: fd,
       onProgress: opts?.onProgress,
     });
   },
 
-  adminListUploads: () =>
-    json<{
+    adminListUploads: () =>
+      j<{
       items: {
         name: string;
         url: string;
@@ -438,96 +467,89 @@ export const api = {
         size: number;
         updatedAt: string;
       }[];
-    }>("/api/admin/uploads"),
+      }>("/api/admin/uploads"),
 
-  adminDeleteUpload: (name: string) =>
-    json<{ ok: true }>(`/api/admin/uploads/${encodeURIComponent(name)}`, { method: "DELETE" }),
+    adminDeleteUpload: (name: string) =>
+      j<{ ok: true }>(`/api/admin/uploads/${encodeURIComponent(name)}`, { method: "DELETE" }),
 
-  adminUpdatePostOrder: (id: number, payload: { featured?: boolean; sortOrder?: number }) =>
-    json<{ ok: true }>(`/api/admin/posts/${id}/order`, {
+    adminUpdatePostOrder: (id: number, payload: { featured?: boolean; sortOrder?: number }) =>
+      j<{ ok: true }>(`/api/admin/posts/${id}/order`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminListComments: (args: { status?: "pending" | "approved"; postId?: number }) => {
-    const url = new URL("/api/admin/comments", window.location.origin);
-    if (args.status) url.searchParams.set("status", args.status);
-    if (args.postId !== undefined) url.searchParams.set("postId", String(args.postId));
-    return json<{ items: CommentAdminRow[] }>(url);
-  },
+    adminListComments: (args: { status?: "pending" | "approved"; postId?: number }) =>
+      j<{ items: CommentAdminRow[] }>(buildUrl("/api/admin/comments", {
+        status: args.status,
+        postId: args.postId,
+      })),
 
-  adminUpdateComment: (id: number, payload: { status?: "pending" | "approved"; contentMd?: string }) =>
-    json<{ ok: true }>(`/api/admin/comments/${id}`, {
+    adminUpdateComment: (id: number, payload: { status?: "pending" | "approved"; contentMd?: string }) =>
+      j<{ ok: true }>(`/api/admin/comments/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminDeleteComment: (id: number) => json<{ ok: true }>(`/api/admin/comments/${id}`, { method: "DELETE" }),
+    adminDeleteComment: (id: number) => j<{ ok: true }>(`/api/admin/comments/${id}`, { method: "DELETE" }),
 
-  adminListLinks: () => json<{ items: Link[] }>("/api/admin/links"),
+    adminListLinks: () => j<{ items: Link[] }>("/api/admin/links"),
 
-  adminCreateLink: (payload: { title: string; url: string; description?: string; iconUrl?: string; sortOrder?: number }) =>
-    json<{ ok: true; id: number }>("/api/admin/links", {
+    adminCreateLink: (payload: { title: string; url: string; description?: string; iconUrl?: string; sortOrder?: number }) =>
+      j<{ ok: true; id: number }>("/api/admin/links", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminUpdateLink: (
+    adminUpdateLink: (
     id: number,
     payload: { title: string; url: string; description?: string; iconUrl?: string; sortOrder?: number },
   ) =>
-    json<{ ok: true }>(`/api/admin/links/${id}`, {
+      j<{ ok: true }>(`/api/admin/links/${id}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminDeleteLink: (id: number) => json<{ ok: true }>(`/api/admin/links/${id}`, { method: "DELETE" }),
+    adminDeleteLink: (id: number) => j<{ ok: true }>(`/api/admin/links/${id}`, { method: "DELETE" }),
 
-  adminListLinkRequests: (args: { status?: "pending" | "approved" }) => {
-    const url = new URL("/api/admin/link-requests", window.location.origin);
-    if (args.status) url.searchParams.set("status", args.status);
-    return json<{ items: LinkRequest[] }>(url);
-  },
+    adminListLinkRequests: (args: { status?: "pending" | "approved" }) =>
+      j<{ items: LinkRequest[] }>(buildUrl("/api/admin/link-requests", { status: args.status })),
 
-  adminUpdateLinkRequest: (id: number, payload: { status: "pending" | "approved" }) =>
-    json<{ ok: true }>(`/api/admin/link-requests/${id}`, {
+    adminUpdateLinkRequest: (id: number, payload: { status: "pending" | "approved" }) =>
+      j<{ ok: true }>(`/api/admin/link-requests/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminDeleteLinkRequest: (id: number) =>
-    json<{ ok: true }>(`/api/admin/link-requests/${id}`, { method: "DELETE" }),
+    adminDeleteLinkRequest: (id: number) =>
+      j<{ ok: true }>(`/api/admin/link-requests/${id}`, { method: "DELETE" }),
 
-  adminDetectLinkIcon: (url: string) => {
-    const u = new URL("/api/admin/link-icon", window.location.origin);
-    u.searchParams.set("url", url);
-    return json<{ iconUrl: string }>(u);
-  },
+    adminDetectLinkIcon: (url: string) =>
+      j<{ iconUrl: string }>(buildUrl("/api/admin/link-icon", { url })),
 
-  adminListSuspiciousIps: (args?: { limit?: number }) => {
-    const u = new URL("/api/admin/security/suspicious", window.location.origin);
-    if (args?.limit) u.searchParams.set("limit", String(args.limit));
-    return json<{ redisEnabled: boolean; items: SuspiciousIp[] }>(u);
-  },
+    adminListSuspiciousIps: (args?: { limit?: number }) =>
+      j<{ redisEnabled: boolean; items: SuspiciousIp[] }>(buildUrl("/api/admin/security/suspicious", { limit: args?.limit })),
 
-  adminListIpBans: () => json<{ items: IpBan[] }>("/api/admin/security/bans"),
+    adminListIpBans: () => j<{ items: IpBan[] }>("/api/admin/security/bans"),
 
-  adminBanIps: (payload: { ips: string[]; reason?: string }) =>
-    json<{ ok: true; added: number; invalid: string[] }>("/api/admin/security/bans", {
+    adminBanIps: (payload: { ips: string[]; reason?: string }) =>
+      j<{ ok: true; added: number; invalid: string[] }>("/api/admin/security/bans", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
+      }),
 
-  adminUnbanIps: (payload: { ips: string[] }) =>
-    json<{ ok: true; removed: number; invalid: string[] }>("/api/admin/security/bans/unban", {
+    adminUnbanIps: (payload: { ips: string[] }) =>
+      j<{ ok: true; removed: number; invalid: string[] }>("/api/admin/security/bans/unban", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
-    }),
-};
+      }),
+  };
+}
+
+export const api = createApiClient();
