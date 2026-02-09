@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { AiSettings, api, CloudflareSettings, User } from "../../api";
+import { AiSettings, api, CloudflareSettings } from "../../api";
 import { ImageField } from "../../components/ImageField";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useSite } from "../../site";
@@ -11,11 +11,13 @@ import "../../admin.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
+
+const selectCls =
+  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 const NAV_ICON_OPTIONS = [
   { key: "home", label: "Home" },
@@ -37,6 +39,15 @@ const NAV_PATH_OPTIONS = [
   { path: "/links", label: "友链 /links" },
   { path: "/about", label: "关于 /about" },
 ];
+
+function StatusMsg({ msg, err }: { msg?: string | null; err?: string | null }) {
+  return (
+    <>
+      {msg ? <span className="text-sm font-medium text-green-600">{msg}</span> : null}
+      {err ? <span className="text-sm font-medium text-destructive">{err}</span> : null}
+    </>
+  );
+}
 
 export function AdminSettingsPage() {
   const { user, loading, refresh } = useMe();
@@ -309,786 +320,681 @@ export function AdminSettingsPage() {
 
       <h2 className="text-2xl font-bold mb-6">系统设置</h2>
 
-      {/* ── Account & Backup (2-col grid) ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Account Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>修改账户信息</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="currentPassword">当前授权密码</Label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="当前授权密码"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newUsername">新用户名 (留空不改)</Label>
-              <Input
-                id="newUsername"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="新用户名 (留空不改)"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newPassword">新密码 (留空不改, 至少8位)</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="新密码 (留空不改, 至少8位)"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="confirmPassword">确认新密码</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="确认新密码"
-              />
-            </div>
-            <Button onClick={onSave} disabled={saving}>
-              {saving ? "保存中..." : "保存更改"}
-            </Button>
-            {msg ? <span className="text-sm text-green-600">{msg}</span> : null}
-            {err ? <span className="text-sm text-red-600">{err}</span> : null}
-          </CardContent>
-        </Card>
+      <div className="grid gap-5">
+        {/* ═══════════════ Account & Backup (2-col) ═══════════════ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Account */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">修改账户信息</CardTitle>
+              <CardDescription>更改管理员用户名或密码</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="currentPassword" className="text-xs text-muted-foreground">当前授权密码</Label>
+                <Input id="currentPassword" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="输入当前密码" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="newUsername" className="text-xs text-muted-foreground">新用户名（留空不改）</Label>
+                <Input id="newUsername" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="新用户名" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="newPassword" className="text-xs text-muted-foreground">新密码（留空不改，至少 8 位）</Label>
+                <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="新密码" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="confirmPassword" className="text-xs text-muted-foreground">确认新密码</Label>
+                <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="再次输入新密码" />
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <Button onClick={onSave} disabled={saving} size="sm">{saving ? "保存中..." : "保存更改"}</Button>
+                <StatusMsg msg={msg} err={err} />
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Backup Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>数据维护</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            {/* DB backup */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">备份全部文章和数据</p>
-              <Button variant="outline" onClick={onDownloadBackup}>下载数据库备份</Button>
-              {backupErr ? <p className="text-sm text-red-600 mt-2">{backupErr}</p> : null}
-            </div>
-
-            <Separator />
-
-            {/* DB restore */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">恢复数据 (危险操作)</p>
-              <input
-                type="file"
-                onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)}
-                accept=".db,.gz,.db.gz"
-                className="block mb-2 text-sm"
-              />
-              <Button variant="destructive" onClick={onRestore} disabled={restoreBusy || !restoreFile}>
-                {restoreBusy ? "恢复中..." : "覆盖并恢复数据"}
-              </Button>
-              {restoreMsg ? <p className="text-sm text-blue-600 mt-2">{restoreMsg}</p> : null}
-              {restoreErr ? <p className="text-sm text-red-600 mt-2">{restoreErr}</p> : null}
-            </div>
-
-            <Separator />
-
-            {/* Full backup / restore */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">全量备份/恢复（包含图片库，带哈希校验）</p>
-              <Button variant="outline" onClick={onDownloadFullBackup}>下载全量备份</Button>
-              <div className="h-3" />
-              <input
-                type="file"
-                onChange={(e) => setRestoreFullFile(e.target.files?.[0] ?? null)}
-                accept=".tar.gz,application/gzip"
-                className="block mb-2 text-sm"
-              />
-              <Button variant="destructive" onClick={onRestoreFull} disabled={restoreFullBusy || !restoreFullFile}>
-                {restoreFullBusy ? "全量恢复中..." : "上传并全量恢复"}
-              </Button>
-              {restoreFullMsg ? <p className="text-sm text-blue-600 mt-2">{restoreFullMsg}</p> : null}
-              {restoreFullErr ? <p className="text-sm text-red-600 mt-2">{restoreFullErr}</p> : null}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Site Settings ── */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>站点外观与内容</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!siteDraft ? (
-            <p className="text-sm text-muted-foreground">加载站点设置中…</p>
-          ) : (
-            <div className="grid gap-6">
-              {/* Nav links */}
+          {/* Backup */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">数据维护</CardTitle>
+              <CardDescription>数据库备份与恢复</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
               <div>
-                <Label className="text-base font-semibold">顶部导航栏</Label>
-                <div className="grid gap-3 mt-3">
-                  <div className="grid gap-2">
-                    <Label htmlFor="brandText">左上角品牌文字</Label>
-                    <Input
-                      id="brandText"
-                      value={siteDraft.nav.brandText}
-                      onChange={(e) => setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, brandText: e.target.value } })}
-                      placeholder="左上角品牌文字（例如 YaBlog）"
-                    />
-                  </div>
+                <p className="text-sm text-muted-foreground mb-2">备份全部文章和数据</p>
+                <Button variant="outline" size="sm" onClick={onDownloadBackup}>下载数据库备份</Button>
+                {backupErr ? <p className="text-sm text-destructive mt-2">{backupErr}</p> : null}
+              </div>
+              <Separator />
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">恢复数据（危险操作）</p>
+                <input type="file" onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)} accept=".db,.gz,.db.gz" className="block mb-2 text-sm" />
+                <div className="flex items-center gap-3">
+                  <Button variant="destructive" size="sm" onClick={onRestore} disabled={restoreBusy || !restoreFile}>
+                    {restoreBusy ? "恢复中..." : "覆盖并恢复"}
+                  </Button>
+                  <StatusMsg msg={restoreMsg} err={restoreErr} />
+                </div>
+              </div>
+              <Separator />
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">全量备份/恢复（含图片库 + 哈希校验）</p>
+                <div className="flex gap-2 mb-2">
+                  <Button variant="outline" size="sm" onClick={onDownloadFullBackup}>下载全量备份</Button>
+                </div>
+                <input type="file" onChange={(e) => setRestoreFullFile(e.target.files?.[0] ?? null)} accept=".tar.gz,application/gzip" className="block mb-2 text-sm" />
+                <div className="flex items-center gap-3">
+                  <Button variant="destructive" size="sm" onClick={onRestoreFull} disabled={restoreFullBusy || !restoreFullFile}>
+                    {restoreFullBusy ? "全量恢复中..." : "上传并全量恢复"}
+                  </Button>
+                  <StatusMsg msg={restoreFullMsg} err={restoreFullErr} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-                  <p className="text-sm text-muted-foreground">导航标签（可编辑文字与图标）</p>
-                  <div className="grid gap-3">
+        {/* ═══════════════ Site Settings Section ═══════════════ */}
+        {!siteDraft ? (
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-sm text-muted-foreground">加载站点设置中…</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Section header */}
+            <div className="flex items-center justify-between gap-3 flex-wrap mt-3">
+              <div>
+                <h3 className="text-lg font-bold">站点外观与内容</h3>
+                <p className="text-sm text-muted-foreground">以下所有设置通过底部「保存站点设置」按钮统一保存</p>
+              </div>
+            </div>
+
+            {/* ── Navigation & Branding ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">导航栏与品牌</CardTitle>
+                <CardDescription>配置顶部导航标签、品牌文字</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="brandText" className="text-xs text-muted-foreground">左上角品牌文字</Label>
+                  <Input
+                    id="brandText"
+                    value={siteDraft.nav.brandText}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, brandText: e.target.value } })}
+                    placeholder="例如 YaBlog"
+                  />
+                </div>
+
+                <Separator />
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">导航标签</Label>
+                  <div className="grid gap-2">
                     {siteDraft.nav.links.map((item, i) => (
-                      <div
-                        key={`${item.path}-${i}`}
-                        className="grid grid-cols-[1.1fr_1.4fr_1fr_auto] gap-2 items-center"
-                      >
-                        <Input
-                          value={item.label}
-                          onChange={(e) => {
-                            const next = [...siteDraft.nav.links];
-                            next[i] = { ...next[i], label: e.target.value };
-                            setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
-                          }}
-                          placeholder="标签文字"
-                        />
-                        <select
-                          value={NAV_PATH_OPTIONS.some((p) => p.path === item.path) ? item.path : ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            const next = [...siteDraft.nav.links];
-                            next[i] = { ...next[i], path: v || next[i].path };
-                            setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
-                          }}
-                          title="选择页面路径"
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                          <option value="">自定义路径（在右侧输入）</option>
-                          {NAV_PATH_OPTIONS.map((p) => (
-                            <option key={p.path} value={p.path}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-                        <Input
-                          value={item.path}
-                          onChange={(e) => {
-                            const next = [...siteDraft.nav.links];
-                            next[i] = { ...next[i], path: e.target.value };
-                            setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
-                          }}
-                          placeholder="/path 或 https://..."
-                          title="路径（内部用 / 开头，外链用 https://）"
-                        />
-                        <div className="flex gap-2 justify-end">
-                          <select
-                            value={item.icon}
+                      <div key={`${item.path}-${i}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center p-3 rounded-lg border border-border/50 bg-muted/20">
+                        <div className="grid gap-1">
+                          <span className="text-xs text-muted-foreground">文字</span>
+                          <Input
+                            value={item.label}
                             onChange={(e) => {
                               const next = [...siteDraft.nav.links];
-                              next[i] = { ...next[i], icon: e.target.value };
+                              next[i] = { ...next[i], label: e.target.value };
                               setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
                             }}
-                            title="图标"
-                            className="flex h-9 w-[140px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          >
-                            {NAV_ICON_OPTIONS.map((opt) => (
-                              <option key={opt.key} value={opt.key}>
-                                {opt.label} ({opt.key})
-                              </option>
-                            ))}
-                          </select>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const next = siteDraft.nav.links.filter((_, idx) => idx !== i);
-                              setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
-                            }}
-                          >
+                            placeholder="标签文字"
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <span className="text-xs text-muted-foreground">路径</span>
+                          <div className="flex gap-1.5">
+                            <select
+                              value={NAV_PATH_OPTIONS.some((p) => p.path === item.path) ? item.path : ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                const next = [...siteDraft.nav.links];
+                                next[i] = { ...next[i], path: v || next[i].path };
+                                setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                              }}
+                              title="选择页面路径"
+                              className={selectCls + " h-8 text-sm"}
+                            >
+                              <option value="">自定义…</option>
+                              {NAV_PATH_OPTIONS.map((p) => (
+                                <option key={p.path} value={p.path}>{p.label}</option>
+                              ))}
+                            </select>
+                            <Input
+                              value={item.path}
+                              onChange={(e) => {
+                                const next = [...siteDraft.nav.links];
+                                next[i] = { ...next[i], path: e.target.value };
+                                setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                              }}
+                              placeholder="/path"
+                              className="h-8 text-sm flex-1"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-end gap-1.5 sm:pb-0 pb-0">
+                          <div className="grid gap-1">
+                            <span className="text-xs text-muted-foreground">图标</span>
+                            <select
+                              value={item.icon}
+                              onChange={(e) => {
+                                const next = [...siteDraft.nav.links];
+                                next[i] = { ...next[i], icon: e.target.value };
+                                setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                              }}
+                              title="图标"
+                              className={selectCls + " h-8 text-sm w-[120px]"}
+                            >
+                              {NAV_ICON_OPTIONS.map((opt) => (
+                                <option key={opt.key} value={opt.key}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" className="text-destructive h-8" onClick={() => {
+                            const next = siteDraft.nav.links.filter((_, idx) => idx !== i);
+                            setSiteDraft({ ...siteDraft, nav: { ...siteDraft.nav, links: next } });
+                          }}>
                             删除
                           </Button>
                         </div>
                       </div>
                     ))}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="w-fit"
-                      onClick={() =>
-                        setSiteDraft({
-                          ...siteDraft,
-                          nav: {
-                            ...siteDraft.nav,
-                            links: [...siteDraft.nav.links, { label: "新标签", path: "/", icon: "link" }],
-                          },
-                        })
-                      }
-                    >
+                    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() =>
+                      setSiteDraft({
+                        ...siteDraft,
+                        nav: { ...siteDraft.nav, links: [...siteDraft.nav.links, { label: "新标签", path: "/", icon: "link" }] },
+                      })
+                    }>
                       + 添加导航标签
                     </Button>
                   </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              <Separator />
-
-              {/* Tab / Favicon */}
-              <div>
-                <Label className="text-base font-semibold">浏览器标签栏（Title / Favicon）</Label>
-                <div className="grid gap-3 mt-3">
-                  <div className="grid gap-2">
-                    <Label htmlFor="tabTitle">标签页标题</Label>
+            {/* ── Browser Tab / Favicon ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">浏览器标签栏</CardTitle>
+                <CardDescription>标签页标题、Favicon 图标</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="tabTitle" className="text-xs text-muted-foreground">标签页标题</Label>
                     <Input
                       id="tabTitle"
                       value={siteDraft.tab.title}
                       onChange={(e) => setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, title: e.target.value } })}
-                      placeholder="标签页标题（显示在浏览器最上方）"
+                      placeholder="浏览器标签页标题"
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="awayTitle">用户切走/最小化时的标题</Label>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="awayTitle" className="text-xs text-muted-foreground">切走时的标题</Label>
                     <Input
                       id="awayTitle"
                       value={siteDraft.tab.awayTitle}
-                      onChange={(e) =>
-                        setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, awayTitle: e.target.value } })
-                      }
+                      onChange={(e) => setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, awayTitle: e.target.value } })}
                       placeholder="用户切走/最小化时的标题"
                     />
                   </div>
-                  <ImageField
-                    label="Favicon 图标（可留空）"
-                    value={siteDraft.tab.faviconUrl}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, faviconUrl: v } })}
-                    help="建议使用正方形 PNG/WebP（32x32 或 64x64）。也支持 /uploads/..."
-                  />
-                  <p className="text-sm text-muted-foreground">当用户不在当前网页（标签页不可见）时，会自动把标题切换为"离开标题"。</p>
                 </div>
-              </div>
+                <ImageField
+                  label="Favicon 图标（可留空）"
+                  value={siteDraft.tab.faviconUrl}
+                  onChange={(v) => setSiteDraft({ ...siteDraft, tab: { ...siteDraft.tab, faviconUrl: v } })}
+                  help="建议 32x32 或 64x64 的正方形 PNG/WebP"
+                />
+                <p className="text-xs text-muted-foreground">用户切走标签页时，标题会自动切换为「切走时的标题」。</p>
+              </CardContent>
+            </Card>
 
-              <Separator />
+            {/* ── Home & Footer ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">首页文案</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="homeTitle" className="text-xs text-muted-foreground">标题</Label>
+                    <Input
+                      id="homeTitle"
+                      value={siteDraft.home.title}
+                      onChange={(e) => setSiteDraft({ ...siteDraft, home: { ...siteDraft.home, title: e.target.value } })}
+                      placeholder="首页大标题"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="homeSubtitle" className="text-xs text-muted-foreground">副标题</Label>
+                    <Input
+                      id="homeSubtitle"
+                      value={siteDraft.home.subtitle}
+                      onChange={(e) => setSiteDraft({ ...siteDraft, home: { ...siteDraft.home, subtitle: e.target.value } })}
+                      placeholder="Minimal · Elegant · Powerful"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-              {/* Footer */}
-              <div>
-                <Label className="text-base font-semibold">底部 Footer</Label>
-                <div className="grid gap-3 mt-3">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">底部 Footer</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
                   <Textarea
                     value={siteDraft.footer.text}
                     onChange={(e) => setSiteDraft({ ...siteDraft, footer: { ...siteDraft.footer, text: e.target.value } })}
                     rows={3}
-                    placeholder="例如：© {year} YaBlog · Designed with Butterfly Style"
+                    placeholder="© {year} YaBlog · Designed with Butterfly Style"
                   />
-                  <p className="text-sm text-muted-foreground">支持占位符：{`{year}`} 会自动替换为当前年份。</p>
+                  <p className="text-xs text-muted-foreground">支持占位符：{`{year}`} 自动替换为当前年份</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ── Hero Images ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">顶部图片</CardTitle>
+                <CardDescription>各页面的顶部横幅图片</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <ImageField label="首页顶部" value={siteDraft.images.homeHero} onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, homeHero: v } })} />
+                  <ImageField label="归档页顶部" value={siteDraft.images.archiveHero} onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, archiveHero: v } })} />
+                  <ImageField label="标签/分类顶部" value={siteDraft.images.tagsHero} onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, tagsHero: v } })} />
+                  <ImageField label="关于页顶部" value={siteDraft.images.aboutHero} onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, aboutHero: v } })} />
+                  <ImageField label="文章默认封面" value={siteDraft.images.defaultPostCover} onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, defaultPostCover: v } })} />
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              <Separator />
-
-              {/* Home copy */}
-              <div>
-                <Label className="text-base font-semibold">首页文案</Label>
-                <div className="grid gap-3 mt-3">
-                  <div className="grid gap-2">
-                    <Label htmlFor="homeTitle">首页标题</Label>
-                    <Input
-                      id="homeTitle"
-                      value={siteDraft.home.title}
-                      onChange={(e) =>
-                        setSiteDraft({ ...siteDraft, home: { ...siteDraft.home, title: e.target.value } })
-                      }
-                      placeholder="首页标题（如 YaBlog）"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="homeSubtitle">首页副标题</Label>
-                    <Input
-                      id="homeSubtitle"
-                      value={siteDraft.home.subtitle}
-                      onChange={(e) =>
-                        setSiteDraft({ ...siteDraft, home: { ...siteDraft.home, subtitle: e.target.value } })
-                      }
-                      placeholder="首页副标题（如 Minimal · Elegant · Powerful）"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Hero images */}
-              <div>
-                <Label className="text-base font-semibold">顶部图片</Label>
-                <div className="grid gap-4 mt-3">
-                  <ImageField
-                    label="首页顶部图片"
-                    value={siteDraft.images.homeHero}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, homeHero: v } })}
-                  />
-                  <ImageField
-                    label="归档顶部图片"
-                    value={siteDraft.images.archiveHero}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, archiveHero: v } })}
-                  />
-                  <ImageField
-                    label="标签/分类顶部图片"
-                    value={siteDraft.images.tagsHero}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, tagsHero: v } })}
-                  />
-                  <ImageField
-                    label="关于页顶部图片"
-                    value={siteDraft.images.aboutHero}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, aboutHero: v } })}
-                  />
-                  <ImageField
-                    label="文章默认封面"
-                    value={siteDraft.images.defaultPostCover}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, images: { ...siteDraft.images, defaultPostCover: v } })}
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Sidebar author card */}
-              <div>
-                <Label className="text-base font-semibold">侧边栏作者卡片</Label>
-                <div className="grid gap-3 mt-3">
-                  <ImageField
-                    label="头像"
-                    value={siteDraft.sidebar.avatarUrl}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, avatarUrl: v } })}
-                  />
-                  <div className="grid gap-2">
-                    <Label htmlFor="sidebarName">昵称</Label>
-                    <Input
-                      id="sidebarName"
-                      value={siteDraft.sidebar.name}
-                      onChange={(e) =>
-                        setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, name: e.target.value } })
-                      }
-                      placeholder="昵称"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="sidebarBio">简介</Label>
-                    <Input
-                      id="sidebarBio"
-                      value={siteDraft.sidebar.bio}
-                      onChange={(e) =>
-                        setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, bio: e.target.value } })
-                      }
-                      placeholder="简介"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label>公告（支持 Markdown）</Label>
-                    <MarkdownEditor
-                      value={siteDraft.sidebar.noticeMd}
-                      onChange={(v) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, noticeMd: v } })}
-                      minHeight={260}
-                    />
-                  </div>
-
-                  {/* Follow buttons */}
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Follow 按钮</Label>
-                    <div className="grid gap-3 mt-2">
-                      {siteDraft.sidebar.followButtons.map((b, i) => (
-                        <div key={`${b.label}-${i}`} className="grid grid-cols-[1fr_1.6fr_auto] gap-2 items-center">
-                          <Input
-                            value={b.label}
-                            onChange={(e) => {
-                              const next = [...siteDraft.sidebar.followButtons];
-                              next[i] = { ...next[i], label: e.target.value };
-                              setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
-                            }}
-                            placeholder="按钮文字"
-                          />
-                          <Input
-                            value={b.url}
-                            onChange={(e) => {
-                              const next = [...siteDraft.sidebar.followButtons];
-                              next[i] = { ...next[i], url: e.target.value };
-                              setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
-                            }}
-                            placeholder="链接（/about 或 https://...）"
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const next = siteDraft.sidebar.followButtons.filter((_, idx) => idx !== i);
-                              setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
-                            }}
-                          >
-                            删除
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-fit"
-                        onClick={() =>
-                          setSiteDraft({
-                            ...siteDraft,
-                            sidebar: {
-                              ...siteDraft.sidebar,
-                              followButtons: [...siteDraft.sidebar.followButtons, { label: "新按钮", url: "https://" }],
-                            },
-                          })
-                        }
-                      >
-                        + 添加按钮
-                      </Button>
+            {/* ── Sidebar Author Card ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">侧边栏作者卡片</CardTitle>
+                <CardDescription>头像、昵称、简介、公告、关注按钮、社媒图标</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5">
+                {/* Basic info */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <ImageField label="头像" value={siteDraft.sidebar.avatarUrl} onChange={(v) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, avatarUrl: v } })} />
+                  <div className="grid gap-3">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">昵称</Label>
+                      <Input value={siteDraft.sidebar.name} onChange={(e) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, name: e.target.value } })} placeholder="昵称" />
                     </div>
-                  </div>
-
-                  {/* Social icons */}
-                  <div>
-                    <Label className="text-sm text-muted-foreground">社媒图标（type 可用：github / youtube / rss / link）</Label>
-                    <div className="grid gap-3 mt-2">
-                      {siteDraft.sidebar.socials.map((s, i) => (
-                        <div key={`${s.type}-${i}`} className="grid grid-cols-[0.8fr_1.8fr_1fr_auto] gap-2 items-center">
-                          <Input
-                            value={s.type}
-                            onChange={(e) => {
-                              const next = [...siteDraft.sidebar.socials];
-                              next[i] = { ...next[i], type: e.target.value };
-                              setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
-                            }}
-                            placeholder="type"
-                          />
-                          <Input
-                            value={s.url}
-                            onChange={(e) => {
-                              const next = [...siteDraft.sidebar.socials];
-                              next[i] = { ...next[i], url: e.target.value };
-                              setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
-                            }}
-                            placeholder="https://..."
-                          />
-                          <Input
-                            value={s.label ?? ""}
-                            onChange={(e) => {
-                              const next = [...siteDraft.sidebar.socials];
-                              next[i] = { ...next[i], label: e.target.value || undefined };
-                              setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
-                            }}
-                            placeholder="提示文字（可空）"
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const next = siteDraft.sidebar.socials.filter((_, idx) => idx !== i);
-                              setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
-                            }}
-                          >
-                            删除
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-fit"
-                        onClick={() =>
-                          setSiteDraft({
-                            ...siteDraft,
-                            sidebar: {
-                              ...siteDraft.sidebar,
-                              socials: [...siteDraft.sidebar.socials, { type: "github", url: "https://github.com/" }],
-                            },
-                          })
-                        }
-                      >
-                        + 添加社媒
-                      </Button>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">简介</Label>
+                      <Input value={siteDraft.sidebar.bio} onChange={(e) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, bio: e.target.value } })} placeholder="一句话简介" />
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <Separator />
+                <Separator />
 
-              {/* About page */}
-              <div>
-                <Label className="text-base font-semibold">关于页（独立，不出现在文章列表）</Label>
-                <div className="grid gap-3 mt-3">
-                  <div className="grid gap-2">
-                    <Label htmlFor="aboutTitle">关于页标题</Label>
-                    <Input
-                      id="aboutTitle"
-                      value={siteDraft.about.title}
-                      onChange={(e) => setSiteDraft({ ...siteDraft, about: { ...siteDraft.about, title: e.target.value } })}
-                      placeholder="关于页标题"
-                    />
-                  </div>
+                {/* Notice */}
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">公告（支持 Markdown）</Label>
                   <MarkdownEditor
-                    value={siteDraft.about.contentMd}
-                    onChange={(v) => setSiteDraft({ ...siteDraft, about: { ...siteDraft.about, contentMd: v } })}
-                    minHeight={360}
+                    value={siteDraft.sidebar.noticeMd}
+                    onChange={(v) => setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, noticeMd: v } })}
+                    minHeight={200}
                   />
                 </div>
-              </div>
 
-              <Separator />
+                <Separator />
 
-              {/* Hotlink protection */}
-              <div>
-                <Label className="text-base font-semibold">防盗链</Label>
-                <div className="grid gap-3 mt-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Checkbox
-                      id="hotlinkEnabled"
-                      checked={siteDraft.security.hotlink.enabled}
-                      onCheckedChange={(checked) =>
-                        setSiteDraft({
-                          ...siteDraft,
-                          security: { ...siteDraft.security, hotlink: { ...siteDraft.security.hotlink, enabled: !!checked } },
-                        })
-                      }
-                    />
-                    <Label htmlFor="hotlinkEnabled" className="font-normal">
-                      开启图片防盗链（阻止非允许站点直接引用 /uploads）
-                    </Label>
-                  </div>
-                  <Textarea
-                    value={siteDraft.security.hotlink.allowedOrigins.join("\n")}
-                    onChange={(e) =>
+                {/* Follow buttons */}
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Follow 按钮</Label>
+                  <div className="grid gap-2">
+                    {siteDraft.sidebar.followButtons.map((b, i) => (
+                      <div key={`${b.label}-${i}`} className="flex gap-2 items-center">
+                        <Input
+                          value={b.label}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.followButtons];
+                            next[i] = { ...next[i], label: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
+                          }}
+                          placeholder="按钮文字"
+                          className="h-8 text-sm w-[120px]"
+                        />
+                        <Input
+                          value={b.url}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.followButtons];
+                            next[i] = { ...next[i], url: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
+                          }}
+                          placeholder="链接 URL"
+                          className="h-8 text-sm flex-1"
+                        />
+                        <Button type="button" variant="ghost" size="sm" className="text-destructive h-8 px-2" onClick={() => {
+                          const next = siteDraft.sidebar.followButtons.filter((_, idx) => idx !== i);
+                          setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, followButtons: next } });
+                        }}>
+                          删除
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() =>
                       setSiteDraft({
                         ...siteDraft,
-                        security: {
-                          ...siteDraft.security,
-                          hotlink: {
-                            ...siteDraft.security.hotlink,
-                            allowedOrigins: e.target.value
-                              .split("\n")
-                              .map((s) => s.trim())
-                              .filter(Boolean),
-                          },
-                        },
+                        sidebar: { ...siteDraft.sidebar, followButtons: [...siteDraft.sidebar.followButtons, { label: "新按钮", url: "https://" }] },
+                      })
+                    }>
+                      + 添加按钮
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Social icons */}
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">社媒图标（type: github / youtube / rss / link）</Label>
+                  <div className="grid gap-2">
+                    {siteDraft.sidebar.socials.map((s, i) => (
+                      <div key={`${s.type}-${i}`} className="flex gap-2 items-center flex-wrap">
+                        <Input
+                          value={s.type}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.socials];
+                            next[i] = { ...next[i], type: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                          }}
+                          placeholder="type"
+                          className="h-8 text-sm w-[100px]"
+                        />
+                        <Input
+                          value={s.url}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.socials];
+                            next[i] = { ...next[i], url: e.target.value };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                          }}
+                          placeholder="https://..."
+                          className="h-8 text-sm flex-1 min-w-[180px]"
+                        />
+                        <Input
+                          value={s.label ?? ""}
+                          onChange={(e) => {
+                            const next = [...siteDraft.sidebar.socials];
+                            next[i] = { ...next[i], label: e.target.value || undefined };
+                            setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                          }}
+                          placeholder="提示文字"
+                          className="h-8 text-sm w-[120px]"
+                        />
+                        <Button type="button" variant="ghost" size="sm" className="text-destructive h-8 px-2" onClick={() => {
+                          const next = siteDraft.sidebar.socials.filter((_, idx) => idx !== i);
+                          setSiteDraft({ ...siteDraft, sidebar: { ...siteDraft.sidebar, socials: next } });
+                        }}>
+                          删除
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() =>
+                      setSiteDraft({
+                        ...siteDraft,
+                        sidebar: { ...siteDraft.sidebar, socials: [...siteDraft.sidebar.socials, { type: "github", url: "https://github.com/" }] },
+                      })
+                    }>
+                      + 添加社媒
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── About Page ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">关于页</CardTitle>
+                <CardDescription>独立页面，不出现在文章列表中</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aboutTitle" className="text-xs text-muted-foreground">页面标题</Label>
+                  <Input
+                    id="aboutTitle"
+                    value={siteDraft.about.title}
+                    onChange={(e) => setSiteDraft({ ...siteDraft, about: { ...siteDraft.about, title: e.target.value } })}
+                    placeholder="关于页标题"
+                  />
+                </div>
+                <MarkdownEditor
+                  value={siteDraft.about.contentMd}
+                  onChange={(v) => setSiteDraft({ ...siteDraft, about: { ...siteDraft.about, contentMd: v } })}
+                  minHeight={360}
+                />
+              </CardContent>
+            </Card>
+
+            {/* ── Hotlink Protection ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">防盗链</CardTitle>
+                <CardDescription>阻止外站直接引用 /uploads 下的图片资源</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Checkbox
+                    id="hotlinkEnabled"
+                    checked={siteDraft.security.hotlink.enabled}
+                    onCheckedChange={(checked) =>
+                      setSiteDraft({
+                        ...siteDraft,
+                        security: { ...siteDraft.security, hotlink: { ...siteDraft.security.hotlink, enabled: !!checked } },
                       })
                     }
-                    placeholder={"允许的 Origin（每行一个），例如：\nhttps://yourdomain.com\nhttps://cdn.yourdomain.com"}
-                    rows={4}
                   />
-                  <p className="text-sm text-muted-foreground">不填写则仅允许本站域名引用；无 Referer 的请求默认放行。</p>
+                  <Label htmlFor="hotlinkEnabled" className="font-normal text-sm">
+                    开启图片防盗链
+                  </Label>
                 </div>
-              </div>
+                <Textarea
+                  value={siteDraft.security.hotlink.allowedOrigins.join("\n")}
+                  onChange={(e) =>
+                    setSiteDraft({
+                      ...siteDraft,
+                      security: {
+                        ...siteDraft.security,
+                        hotlink: {
+                          ...siteDraft.security.hotlink,
+                          allowedOrigins: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                        },
+                      },
+                    })
+                  }
+                  placeholder={"允许的 Origin（每行一个），例如：\nhttps://yourdomain.com"}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">不填写则仅允许本站域名引用；无 Referer 的请求默认放行。</p>
+              </CardContent>
+            </Card>
 
-              <Separator />
-
-              {/* Cloudflare cache */}
-              <div>
-                <Label className="text-base font-semibold">Cloudflare 缓存自动刷新</Label>
-                {!cfDraft ? (
-                  <p className="text-sm text-muted-foreground mt-2">加载 Cloudflare 设置中…</p>
-                ) : (
-                  <div className="grid gap-3 mt-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <Checkbox
-                        id="cfEnabled"
-                        checked={cfDraft.enabled}
-                        onCheckedChange={(checked) => setCfDraft({ ...cfDraft, enabled: !!checked })}
-                      />
-                      <Label htmlFor="cfEnabled" className="font-normal">
-                        启用 Cloudflare Purge（通过邮箱 + Global API Key + Zone ID 自动刷新缓存）
-                      </Label>
-                    </div>
-
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <Checkbox
-                        id="cfAutoPurge"
-                        checked={cfDraft.autoPurge}
-                        onCheckedChange={(checked) => setCfDraft({ ...cfDraft, autoPurge: !!checked })}
-                        disabled={!cfDraft.enabled}
-                      />
-                      <Label htmlFor="cfAutoPurge" className="font-normal">
-                        网页内容更新时自动刷新（发布/修改文章、站点设置、替换图片等）
-                      </Label>
-                    </div>
-
-                    <Input
-                      value={cfDraft.email}
-                      onChange={(e) => setCfDraft({ ...cfDraft, email: e.target.value })}
-                      placeholder="Cloudflare 邮箱（Email）"
-                    />
-                    <Input
-                      type="password"
-                      value={cfDraft.apiKey}
-                      onChange={(e) => setCfDraft({ ...cfDraft, apiKey: e.target.value })}
-                      placeholder="Cloudflare Global API Key（敏感，仅保存在服务器）"
-                    />
-                    <Input
-                      value={cfDraft.zoneId}
-                      onChange={(e) => setCfDraft({ ...cfDraft, zoneId: e.target.value })}
-                      placeholder="Zone ID（域名区域 / Zone Identifier）"
-                    />
-
-                    <div className="flex gap-3 items-center flex-wrap">
-                      <Button variant="outline" onClick={saveCloudflare} disabled={cfBusy}>
-                        {cfBusy ? "保存中…" : "保存 Cloudflare 设置"}
-                      </Button>
-                      <Button variant="outline" onClick={purgeCloudflare} disabled={cfBusy || !cfDraft.enabled}>
-                        {cfBusy ? "处理中…" : "立即刷新缓存"}
-                      </Button>
-                      {cfMsg ? <span className="text-sm text-green-600">{cfMsg}</span> : null}
-                      {cfErr ? <span className="text-sm text-red-600">{cfErr}</span> : null}
-                    </div>
-
-                    <p className="text-sm text-muted-foreground">
-                      重要：若 Cloudflare 开了 <code>Cache Everything</code> 或忽略源站缓存头，请在 Cloudflare 里对{" "}
-                      <code>/admin*</code>、<code>/api*</code> 设置 <code>Bypass cache</code>，否则后台仍可能被缓存。
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <Separator />
-
-              {/* Save site button */}
-              <div className="flex gap-3 items-center flex-wrap">
-                <Button onClick={saveSite} disabled={siteBusy}>
-                  {siteBusy ? "保存中…" : "保存站点设置"}
-                </Button>
-                {siteMsg ? <span className="text-sm text-green-600">{siteMsg}</span> : null}
-                {siteErr ? <span className="text-sm text-red-600">{siteErr}</span> : null}
-              </div>
+            {/* ── Save Site Settings (prominent) ── */}
+            <div className="flex items-center gap-3 flex-wrap p-4 rounded-xl bg-card border border-border">
+              <Button onClick={saveSite} disabled={siteBusy}>
+                {siteBusy ? "保存中…" : "保存站点设置"}
+              </Button>
+              <StatusMsg msg={siteMsg} err={siteErr} />
+              <span className="text-xs text-muted-foreground">以上所有「站点外观与内容」设置将统一保存</span>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        )}
 
-      {/* ── AI Settings ── */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>AI 对话</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!aiDraft ? (
-            <p className="text-sm text-muted-foreground">加载 AI 设置中…</p>
-          ) : (
-            <div className="grid gap-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                <Checkbox
-                  id="aiEnabled"
-                  checked={aiDraft.enabled}
-                  onCheckedChange={(checked) => setAiDraft({ ...aiDraft, enabled: !!checked })}
-                />
-                <Label htmlFor="aiEnabled" className="font-normal">
-                  启用 AI 对话（/ai 页面）
-                </Label>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>模式（auto 会根据 apiBase/报错自动切换到 Codex CLI）</Label>
-                <select
-                  value={aiDraft.mode}
-                  onChange={(e) => setAiDraft({ ...aiDraft, mode: e.target.value as any })}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="auto">auto</option>
-                  <option value="http">http（直连 OpenAI/兼容接口）</option>
-                  <option value="codex">codex（本机 codex exec）</option>
-                </select>
-              </div>
-
-              <div className="grid gap-3">
-                <Input
-                  value={aiDraft.model}
-                  onChange={(e) => setAiDraft({ ...aiDraft, model: e.target.value })}
-                  placeholder="模型（例如 gpt-4o-mini）"
-                />
-                <Input
-                  value={aiDraft.apiBase}
-                  onChange={(e) => setAiDraft({ ...aiDraft, apiBase: e.target.value })}
-                  placeholder="apiBase（例如 https://api.openai.com/v1 或你的兼容接口 /v1）"
-                />
-                <Input
-                  type="password"
-                  value={aiDraft.apiKey}
-                  onChange={(e) => setAiDraft({ ...aiDraft, apiKey: e.target.value })}
-                  placeholder="apiKey（服务器端保存，仅后台可见）"
-                />
-                <Input
-                  type="number"
-                  value={aiDraft.timeoutMs}
-                  onChange={(e) => setAiDraft({ ...aiDraft, timeoutMs: Number(e.target.value) || 60000 })}
-                  placeholder="超时（ms）"
-                />
-              </div>
-
-              <Separator />
-
-              <div>
-                <Label className="text-sm text-muted-foreground">Codex CLI（可选：粘贴 config.toml / auth.json；不填则用自动生成的最小 config.toml）</Label>
-                <div className="grid gap-3 mt-2">
-                  <div className="grid gap-2">
-                    <Label>codex config.toml</Label>
-                    <Textarea
-                      value={aiDraft.codex.configToml}
-                      onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, configToml: e.target.value } })}
-                      rows={8}
-                      placeholder={'[providers.openai]\nname="openai"\nbase_url="https://.../v1"\nenv_key="GPT_API_KEY"\nwire_api="responses"'}
-                      className="font-mono"
-                    />
+        {/* ═══════════════ Cloudflare ═══════════════ */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Cloudflare 缓存</CardTitle>
+            <CardDescription>自动刷新 CDN 缓存（通过邮箱 + Global API Key + Zone ID）</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!cfDraft ? (
+              <p className="text-sm text-muted-foreground">加载 Cloudflare 设置中…</p>
+            ) : (
+              <div className="grid gap-4">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <Checkbox id="cfEnabled" checked={cfDraft.enabled} onCheckedChange={(checked) => setCfDraft({ ...cfDraft, enabled: !!checked })} />
+                    <Label htmlFor="cfEnabled" className="font-normal text-sm">启用 Cloudflare Purge</Label>
                   </div>
-                  <div className="grid gap-2">
-                    <Label>codex auth.json</Label>
-                    <Textarea
-                      value={aiDraft.codex.authJson}
-                      onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, authJson: e.target.value } })}
-                      rows={6}
-                      placeholder="{ ... }"
-                      className="font-mono"
-                    />
+                  <div className="flex items-center gap-3">
+                    <Checkbox id="cfAutoPurge" checked={cfDraft.autoPurge} onCheckedChange={(checked) => setCfDraft({ ...cfDraft, autoPurge: !!checked })} disabled={!cfDraft.enabled} />
+                    <Label htmlFor="cfAutoPurge" className="font-normal text-sm">内容更新时自动刷新</Label>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input
-                      value={aiDraft.codex.envKey}
-                      onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, envKey: e.target.value } })}
-                      placeholder="env_key（默认 GPT_API_KEY）"
-                    />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">邮箱</Label>
+                    <Input value={cfDraft.email} onChange={(e) => setCfDraft({ ...cfDraft, email: e.target.value })} placeholder="Cloudflare 邮箱" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Global API Key</Label>
+                    <Input type="password" value={cfDraft.apiKey} onChange={(e) => setCfDraft({ ...cfDraft, apiKey: e.target.value })} placeholder="API Key（仅服务器保存）" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Zone ID</Label>
+                    <Input value={cfDraft.zoneId} onChange={(e) => setCfDraft({ ...cfDraft, zoneId: e.target.value })} placeholder="Zone Identifier" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={saveCloudflare} disabled={cfBusy}>{cfBusy ? "保存中…" : "保存 CF 设置"}</Button>
+                  <Button variant="outline" size="sm" onClick={purgeCloudflare} disabled={cfBusy || !cfDraft.enabled}>{cfBusy ? "处理中…" : "立即刷新缓存"}</Button>
+                  <StatusMsg msg={cfMsg} err={cfErr} />
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  提示：若 Cloudflare 开启了 <code className="px-1 py-0.5 bg-muted rounded text-xs">Cache Everything</code>，请对 <code className="px-1 py-0.5 bg-muted rounded text-xs">/admin*</code> 和 <code className="px-1 py-0.5 bg-muted rounded text-xs">/api*</code> 设置 Bypass cache。
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ═══════════════ AI Settings ═══════════════ */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">AI 对话</CardTitle>
+            <CardDescription>配置 /ai 页面的 AI 对话功能</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!aiDraft ? (
+              <p className="text-sm text-muted-foreground">加载 AI 设置中…</p>
+            ) : (
+              <div className="grid gap-4">
+                <div className="flex items-center gap-3">
+                  <Checkbox id="aiEnabled" checked={aiDraft.enabled} onCheckedChange={(checked) => setAiDraft({ ...aiDraft, enabled: !!checked })} />
+                  <Label htmlFor="aiEnabled" className="font-normal text-sm">启用 AI 对话（/ai 页面）</Label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">模式</Label>
                     <select
-                      value={aiDraft.codex.wireApi}
-                      onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, wireApi: e.target.value as any } })}
-                      title="wire_api"
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={aiDraft.mode}
+                      onChange={(e) => setAiDraft({ ...aiDraft, mode: e.target.value as any })}
+                      className={selectCls}
                     >
-                      <option value="responses">responses</option>
-                      <option value="chat">chat</option>
+                      <option value="auto">auto（自动切换）</option>
+                      <option value="http">http（直连接口）</option>
+                      <option value="codex">codex（本机 CLI）</option>
                     </select>
                   </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">模型</Label>
+                    <Input value={aiDraft.model} onChange={(e) => setAiDraft({ ...aiDraft, model: e.target.value })} placeholder="gpt-4o-mini" />
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex gap-3 items-center flex-wrap">
-                <Button onClick={saveAi} disabled={aiBusy}>
-                  {aiBusy ? "保存中…" : "保存 AI 设置"}
-                </Button>
-                {aiMsg ? <span className="text-sm text-green-600">{aiMsg}</span> : null}
-                {aiErr ? <span className="text-sm text-red-600">{aiErr}</span> : null}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">API Base URL</Label>
+                    <Input value={aiDraft.apiBase} onChange={(e) => setAiDraft({ ...aiDraft, apiBase: e.target.value })} placeholder="https://api.openai.com/v1" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">API Key</Label>
+                    <Input type="password" value={aiDraft.apiKey} onChange={(e) => setAiDraft({ ...aiDraft, apiKey: e.target.value })} placeholder="sk-..." />
+                  </div>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">超时（ms）</Label>
+                  <Input type="number" value={aiDraft.timeoutMs} onChange={(e) => setAiDraft({ ...aiDraft, timeoutMs: Number(e.target.value) || 60000 })} className="w-[200px]" />
+                </div>
+
+                <Separator />
+
+                {/* Codex CLI */}
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Codex CLI 配置（可选）</Label>
+                  <div className="grid gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs text-muted-foreground">config.toml</Label>
+                        <Textarea
+                          value={aiDraft.codex.configToml}
+                          onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, configToml: e.target.value } })}
+                          rows={6}
+                          placeholder={'[providers.openai]\nname="openai"\nbase_url="https://.../v1"'}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs text-muted-foreground">auth.json</Label>
+                        <Textarea
+                          value={aiDraft.codex.authJson}
+                          onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, authJson: e.target.value } })}
+                          rows={6}
+                          placeholder="{ ... }"
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs text-muted-foreground">env_key</Label>
+                        <Input value={aiDraft.codex.envKey} onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, envKey: e.target.value } })} placeholder="GPT_API_KEY" />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs text-muted-foreground">wire_api</Label>
+                        <select
+                          value={aiDraft.codex.wireApi}
+                          onChange={(e) => setAiDraft({ ...aiDraft, codex: { ...aiDraft.codex, wireApi: e.target.value as any } })}
+                          className={selectCls}
+                        >
+                          <option value="responses">responses</option>
+                          <option value="chat">chat</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button onClick={saveAi} disabled={aiBusy} size="sm">{aiBusy ? "保存中…" : "保存 AI 设置"}</Button>
+                  <StatusMsg msg={aiMsg} err={aiErr} />
+                </div>
+                <p className="text-xs text-muted-foreground">使用 codex 模式需要服务器环境中存在 <code className="px-1 py-0.5 bg-muted rounded text-xs">codex</code> 命令。</p>
               </div>
-              <p className="text-sm text-muted-foreground">提示：使用 codex 模式需要服务器环境里存在 `codex` 命令（Codex CLI）。</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </AdminLayoutWrapper>
   );
 }
