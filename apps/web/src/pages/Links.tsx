@@ -1,23 +1,26 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { MdRefresh } from "react-icons/md";
+import { useLoaderData } from "react-router-dom";
 
 import { api, Captcha, Link, LinkRequest } from "../api";
 import { useSite } from "../site";
 import { Sidebar } from "../components/Sidebar";
 import { Markdown } from "../components/Markdown";
 import { placeholderImageDataUrl } from "../placeholder";
+import type { LinksLoaderData } from "../loaders";
 
 export function LinksPage() {
   const { site } = useSite();
+  const loaderData = useLoaderData() as LinksLoaderData | undefined;
 
-  const [links, setLinks] = useState<Link[]>([]);
-  const [requests, setRequests] = useState<LinkRequest[]>([]);
+  const [links, setLinks] = useState<Link[]>(loaderData?.links ?? []);
+  const [requests, setRequests] = useState<LinkRequest[]>(loaderData?.requests ?? []);
   const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!loaderData);
 
   const [captcha, setCaptcha] = useState<Captcha | null>(null);
   const [captchaAnswer, setCaptchaAnswer] = useState("");
-  const [name, setName] = useState(() => localStorage.getItem("yablog_linkreq_name") ?? "");
+  const [name, setName] = useState(() => (typeof localStorage !== "undefined" ? localStorage.getItem("yablog_linkreq_name") : null) ?? "");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
   const [message, setMessage] = useState("");
@@ -51,7 +54,7 @@ export function LinksPage() {
 
   useEffect(() => {
     refreshCaptcha();
-    refresh();
+    if (!loaderData) refresh();
   }, [refreshCaptcha, refresh]);
 
   const bg =

@@ -10,9 +10,9 @@ type SiteState = {
 
 const SiteContext = createContext<SiteState | null>(null);
 
-export function SiteProvider({ children }: { children: React.ReactNode }) {
-  const [site, setSite] = useState<SiteSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+export function SiteProvider({ children, initialSite }: { children: React.ReactNode; initialSite?: SiteSettings | null }) {
+  const [site, setSite] = useState<SiteSettings | null>(initialSite ?? null);
+  const [loading, setLoading] = useState(!initialSite);
 
   const refresh = async () => {
     const res = await api.site();

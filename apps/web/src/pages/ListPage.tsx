@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams, useLoaderData } from "react-router-dom";
 
 import { api, Post } from "../api";
 import { PostCard } from "../components/PostCard";
 import { Sidebar } from "../components/Sidebar";
 import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
+import type {
+  ArchiveLoaderData,
+  TagListLoaderData,
+  TagLoaderData,
+  CategoryListLoaderData,
+  CategoryLoaderData,
+} from "../loaders";
 
 function hashString(input: string) {
   let h = 2166136261;
@@ -51,10 +58,11 @@ const PageLayout = ({ children, title, bg }: { children: React.ReactNode; title:
 
 export function ArchivePage() {
   const { site } = useSite();
-  const [items, setItems] = useState<Post[]>([]);
+  const loaderData = useLoaderData() as ArchiveLoaderData | undefined;
+  const [items, setItems] = useState<Post[]>(loaderData?.posts ?? []);
   const [err, setErr] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [total, setTotal] = useState(loaderData?.total ?? 0);
   const limit = 12;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -82,6 +90,7 @@ export function ArchivePage() {
   };
 
   useEffect(() => {
+    if (loaderData) return;
     let alive = true;
     (async () => {
       try {
@@ -227,10 +236,12 @@ export function SearchPage() {
 
 export function TagListPage() {
   const { site } = useSite();
-  const [items, setItems] = useState<string[]>([]);
+  const loaderData = useLoaderData() as TagListLoaderData | undefined;
+  const [items, setItems] = useState<string[]>(loaderData?.tags ?? []);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loaderData) return;
     let alive = true;
     (async () => {
       try {
@@ -270,10 +281,12 @@ export function TagListPage() {
 
 export function CategoryListPage() {
   const { site } = useSite();
-  const [items, setItems] = useState<{ name: string; slug: string }[]>([]);
+  const loaderData = useLoaderData() as CategoryListLoaderData | undefined;
+  const [items, setItems] = useState<{ name: string; slug: string }[]>(loaderData?.categories ?? []);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loaderData) return;
     let alive = true;
     (async () => {
       try {
@@ -314,10 +327,12 @@ export function CategoryListPage() {
 export function TagPage() {
   const { site } = useSite();
   const { tag } = useParams();
-  const [items, setItems] = useState<Post[]>([]);
+  const loaderData = useLoaderData() as TagLoaderData | undefined;
+  const [items, setItems] = useState<Post[]>(loaderData?.posts ?? []);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loaderData) return;
     if (!tag) return;
     let alive = true;
     (async () => {
@@ -350,10 +365,12 @@ export function TagPage() {
 export function CategoryPage() {
   const { site } = useSite();
   const { category } = useParams();
-  const [items, setItems] = useState<Post[]>([]);
+  const loaderData = useLoaderData() as CategoryLoaderData | undefined;
+  const [items, setItems] = useState<Post[]>(loaderData?.posts ?? []);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loaderData) return;
     if (!category) return;
     let alive = true;
     (async () => {

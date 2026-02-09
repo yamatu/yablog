@@ -31,8 +31,10 @@ import {
   getUserById,
   hasAnyUsers,
   initDb,
+  listCategories,
   listPosts,
   listIpBans,
+  listTags,
   migrateDb,
   openDb,
   setAiSettings,
@@ -861,6 +863,32 @@ app.get("/sitemap.xml", (req, res) => {
   urls.push(
     `<url><loc>${esc(origin + "/")}</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
   );
+
+  // Static pages
+  const staticPages = ["/about", "/archive", "/tags", "/categories", "/links"];
+  for (const p of staticPages) {
+    urls.push(
+      `<url><loc>${esc(origin + p)}</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>`,
+    );
+  }
+
+  // Tag pages
+  const tags = listTags(db);
+  for (const t of tags) {
+    urls.push(
+      `<url><loc>${esc(origin + "/tag/" + encodeURIComponent(t))}</loc><changefreq>weekly</changefreq><priority>0.4</priority></url>`,
+    );
+  }
+
+  // Category pages
+  const categories = listCategories(db);
+  for (const c of categories) {
+    urls.push(
+      `<url><loc>${esc(origin + "/category/" + encodeURIComponent(c.name))}</loc><changefreq>weekly</changefreq><priority>0.4</priority></url>`,
+    );
+  }
+
+  // Post pages
   for (const p of items) {
     const loc = `${origin}/post/${encodeURIComponent(p.slug)}`;
     const lastmod = new Date(p.updatedAt || p.publishedAt || p.createdAt).toISOString();
@@ -1654,8 +1682,13 @@ if (config.webDistPath && fs.existsSync(config.webDistPath)) {
   app.get("*", async (req, res) => {
     if (req.path.startsWith("/api")) return res.status(404).json({ error: "not_found" });
 
-    const shouldSsr =
-      !!ssrRender && (req.path === "/" || req.path.startsWith("/post/"));
+    const ssrPaths = ["/", "/about", "/archive", "/tags", "/categories", "/links"];
+    const shouldSsr = !!ssrRender && (
+      ssrPaths.includes(req.path) ||
+      req.path.startsWith("/post/") ||
+      req.path.startsWith("/tag/") ||
+      req.path.startsWith("/category/")
+    );
 
     if (!shouldSsr) {
       return res.sendFile(indexHtml);

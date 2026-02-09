@@ -1,20 +1,21 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLoaderData } from "react-router-dom";
 
 import { Markdown } from "../components/Markdown";
 import { Sidebar } from "../components/Sidebar";
-import { LoadingCenter } from "../components/Loading";
 import { useSite } from "../site";
 import { placeholderImageDataUrl } from "../placeholder";
+import type { AboutLoaderData } from "../loaders";
 
 export function AboutPage() {
-  const { site, loading } = useSite();
-  const about = site?.about ?? null;
+  const loaderData = useLoaderData() as AboutLoaderData | undefined;
+  const { site } = useSite();
+  const about = loaderData?.about ?? site?.about ?? null;
 
   const bg = useMemo(() => {
-    const hero = site?.images.aboutHero && site.images.aboutHero.trim() ? site.images.aboutHero : "";
+    const hero = loaderData?.heroImage?.trim() || (site?.images.aboutHero && site.images.aboutHero.trim() ? site.images.aboutHero : "");
     return hero || placeholderImageDataUrl("aboutHero", about?.title ?? "关于");
-  }, [site?.images.aboutHero, about?.title]);
+  }, [loaderData?.heroImage, site?.images.aboutHero, about?.title]);
 
   return (
     <div className="butterfly-layout">
@@ -26,9 +27,7 @@ export function AboutPage() {
       <div className="main-content">
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="card markdown">
-            {loading && !about ? (
-              <LoadingCenter label="加载中…" />
-            ) : about ? (
+            {about ? (
               <Markdown value={about.contentMd} />
             ) : (
               <div style={{ textAlign: "center", padding: 40 }}>

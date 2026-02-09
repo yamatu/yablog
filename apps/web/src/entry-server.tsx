@@ -7,7 +7,7 @@ import {
 } from "react-router-dom/server";
 
 import { ssrRoutes } from "./routes.ssr";
-import type { HomeLoaderData, PostLoaderData } from "./loaders";
+import type { PostLoaderData, RootLoaderData } from "./loaders";
 
 function escapeHtml(s: string) {
   return s
@@ -16,6 +16,10 @@ function escapeHtml(s: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function escapeJsonLd(s: string) {
+  return s.replaceAll("</", "<\\/");
 }
 
 function makeHead({
@@ -28,15 +32,57 @@ function makeHead({
   const path = url.pathname;
   const origin = url.origin;
 
-  if (path === "/") {
-    const title = "YaBlog";
-    const desc = "YaBlog - A modern blog.";
+  // Extract site settings from root loader
+  const rootData = (loaderData?.root ?? null) as RootLoaderData | null;
+  const siteName = rootData?.site?.home?.title || rootData?.site?.nav?.brandText || "YaBlog";
+  const siteDesc = rootData?.site?.home?.subtitle || `${siteName} - A modern blog.`;
+
+  // Helper to build a simple page head
+  const simplePage = (pageTitle: string, canonical: string) => {
+    const title = `${pageTitle} - ${siteName}`;
     return {
       title,
-      headTags: `\n<title>${escapeHtml(title)}</title>\n<meta name="description" content="${escapeHtml(desc)}" />\n<link rel="canonical" href="${escapeHtml(origin + "/")}" />\n`,
+      headTags:
+        `\n<title>${escapeHtml(title)}</title>` +
+        `\n<meta name="description" content="${escapeHtml(siteDesc)}" />` +
+        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:type" content="website" />` +
+        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
+        `\n<meta property="og:description" content="${escapeHtml(siteDesc)}" />` +
+        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
+        `\n`,
+    };
+  };
+
+  // ── Home ──
+  if (path === "/") {
+    const title = siteName;
+    const desc = siteDesc;
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: siteName,
+      description: desc,
+      url: origin + "/",
+    };
+    return {
+      title,
+      headTags:
+        `\n<title>${escapeHtml(title)}</title>` +
+        `\n<meta name="description" content="${escapeHtml(desc)}" />` +
+        `\n<link rel="canonical" href="${escapeHtml(origin + "/")}" />` +
+        `\n<meta property="og:type" content="website" />` +
+        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
+        `\n<meta property="og:description" content="${escapeHtml(desc)}" />` +
+        `\n<meta property="og:url" content="${escapeHtml(origin + "/")}" />` +
+        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
+        `\n<script type="application/ld+json">${escapeJsonLd(JSON.stringify(jsonLd))}</script>` +
+        `\n`,
     };
   }
 
+  // ── Post ──
   if (path.startsWith("/post/")) {
     const data = (loaderData?.post ?? null) as PostLoaderData | null;
     const post = data?.post;
@@ -57,13 +103,96 @@ function makeHead({
     const publishedTime = post.publishedAt || post.createdAt;
     const modifiedTime = post.updatedAt;
 
+    const jsonLd: Record<string, unknown> = {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: title,
+      description: desc,
+      url: canonical,
+      datePublished: publishedTime,
+      dateModified: modifiedTime,
+      author: { "@type": "Person", name: rootData?.site?.sidebar?.name || siteName },
+      publisher: { "@type": "Organization", name: siteName },
+    };
+    if (image) jsonLd.image = image;
+
     return {
       title,
-      headTags: `\n<title>${escapeHtml(title)}</title>\n<meta name="description" content="${escapeHtml(desc)}" />\n<link rel="canonical" href="${escapeHtml(canonical)}" />\n<meta property="og:type" content="article" />\n<meta property="og:title" content="${escapeHtml(title)}" />\n<meta property="og:description" content="${escapeHtml(desc)}" />\n<meta property="og:url" content="${escapeHtml(canonical)}" />\n${image ? `<meta property="og:image" content="${escapeHtml(image)}" />\n` : ""}<meta property="article:published_time" content="${escapeHtml(publishedTime)}" />\n<meta property="article:modified_time" content="${escapeHtml(modifiedTime)}" />\n<meta name="twitter:card" content="summary_large_image" />\n<meta name="twitter:title" content="${escapeHtml(title)}" />\n<meta name="twitter:description" content="${escapeHtml(desc)}" />\n${image ? `<meta name="twitter:image" content="${escapeHtml(image)}" />\n` : ""}`,
+      headTags:
+        `\n<title>${escapeHtml(title)}</title>` +
+        `\n<meta name="description" content="${escapeHtml(desc)}" />` +
+        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:type" content="article" />` +
+        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
+        `\n<meta property="og:description" content="${escapeHtml(desc)}" />` +
+        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
+        (image ? `\n<meta property="og:image" content="${escapeHtml(image)}" />` : "") +
+        `\n<meta property="article:published_time" content="${escapeHtml(publishedTime)}" />` +
+        `\n<meta property="article:modified_time" content="${escapeHtml(modifiedTime)}" />` +
+        `\n<meta name="twitter:card" content="summary_large_image" />` +
+        `\n<meta name="twitter:title" content="${escapeHtml(title)}" />` +
+        `\n<meta name="twitter:description" content="${escapeHtml(desc)}" />` +
+        (image ? `\n<meta name="twitter:image" content="${escapeHtml(image)}" />` : "") +
+        `\n<script type="application/ld+json">${escapeJsonLd(JSON.stringify(jsonLd))}</script>` +
+        `\n`,
     };
   }
 
-  return { title: "YaBlog", headTags: "" };
+  // ── About ──
+  if (path === "/about") return simplePage("关于", `${origin}/about`);
+
+  // ── Archive ──
+  if (path === "/archive") return simplePage("归档", `${origin}/archive`);
+
+  // ── Tags ──
+  if (path === "/tags") return simplePage("标签", `${origin}/tags`);
+
+  // ── Tag ──
+  if (path.startsWith("/tag/")) {
+    const tag = decodeURIComponent(path.slice("/tag/".length));
+    const title = `标签: ${tag} - ${siteName}`;
+    const canonical = `${origin}/tag/${encodeURIComponent(tag)}`;
+    return {
+      title,
+      headTags:
+        `\n<title>${escapeHtml(title)}</title>` +
+        `\n<meta name="description" content="${escapeHtml(`${tag} - ${siteName}`)}" />` +
+        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:type" content="website" />` +
+        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
+        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
+        `\n`,
+    };
+  }
+
+  // ── Categories ──
+  if (path === "/categories") return simplePage("分类", `${origin}/categories`);
+
+  // ── Category ──
+  if (path.startsWith("/category/")) {
+    const cat = decodeURIComponent(path.slice("/category/".length));
+    const title = `分类: ${cat} - ${siteName}`;
+    const canonical = `${origin}/category/${encodeURIComponent(cat)}`;
+    return {
+      title,
+      headTags:
+        `\n<title>${escapeHtml(title)}</title>` +
+        `\n<meta name="description" content="${escapeHtml(`${cat} - ${siteName}`)}" />` +
+        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:type" content="website" />` +
+        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
+        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
+        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
+        `\n`,
+    };
+  }
+
+  // ── Links ──
+  if (path === "/links") return simplePage("友情链接", `${origin}/links`);
+
+  return { title: siteName, headTags: "" };
 }
 
 export async function render(requestUrl: string, opts?: { headers?: Record<string, string> }) {

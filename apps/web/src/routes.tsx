@@ -2,6 +2,7 @@ import {
   Outlet,
   isRouteErrorResponse,
   useRouteError,
+  useRouteLoaderData,
   Navigate,
   type RouteObject,
 } from "react-router-dom";
@@ -32,11 +33,24 @@ import {
   AdminSettingsPage,
 } from "./pages/admin/Admin";
 
-import { homeLoader, postLoader } from "./loaders";
+import {
+  rootLoader,
+  homeLoader,
+  postLoader,
+  aboutLoader,
+  archiveLoader,
+  tagListLoader,
+  tagLoader,
+  categoryListLoader,
+  categoryLoader,
+  linksLoader,
+} from "./loaders";
+import type { RootLoaderData } from "./loaders";
 
 function Root() {
+  const data = useRouteLoaderData("root") as RootLoaderData | undefined;
   return (
-    <SiteProvider>
+    <SiteProvider initialSite={data?.site}>
       <Layout>
         <Outlet />
       </Layout>
@@ -68,20 +82,22 @@ function RootError() {
 
 export const routes: RouteObject[] = [
   {
+    id: "root",
     path: "/",
     element: <Root />,
     errorElement: <RootError />,
+    loader: rootLoader,
     children: [
       { id: "home", index: true, element: <HomePage />, loader: homeLoader },
       { id: "post", path: "post/:slug", element: <PostPage />, loader: postLoader },
-      { path: "archive", element: <ArchivePage /> },
+      { id: "archive", path: "archive", element: <ArchivePage />, loader: archiveLoader },
       { path: "search", element: <SearchPage /> },
-      { path: "tags", element: <TagListPage /> },
-      { path: "tag/:tag", element: <TagPage /> },
-      { path: "categories", element: <CategoryListPage /> },
-      { path: "category/:category", element: <CategoryPage /> },
-      { path: "about", element: <AboutPage /> },
-      { path: "links", element: <LinksPage /> },
+      { id: "tags", path: "tags", element: <TagListPage />, loader: tagListLoader },
+      { id: "tag", path: "tag/:tag", element: <TagPage />, loader: tagLoader },
+      { id: "categories", path: "categories", element: <CategoryListPage />, loader: categoryListLoader },
+      { id: "category", path: "category/:category", element: <CategoryPage />, loader: categoryLoader },
+      { id: "about", path: "about", element: <AboutPage />, loader: aboutLoader },
+      { id: "links", path: "links", element: <LinksPage />, loader: linksLoader },
       { path: "ai", element: <AiPage /> },
 
       { path: "admin/login", element: <AdminLoginPage /> },
