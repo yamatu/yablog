@@ -1,5 +1,6 @@
 import {
   Outlet,
+  ScrollRestoration,
   isRouteErrorResponse,
   useRouteError,
   useRouteLoaderData,
@@ -54,6 +55,7 @@ function Root() {
       <Layout>
         <Outlet />
       </Layout>
+      <ScrollRestoration />
     </SiteProvider>
   );
 }
