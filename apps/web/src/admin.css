@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--card);
+  --color-card-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: color-mix(in oklab, var(--accent) 10%, var(--bg));
+  --color-secondary-foreground: var(--text);
+  --color-muted: color-mix(in oklab, var(--bg) 80%, var(--text));
+  --color-muted-foreground: var(--muted);
+  --color-accent: color-mix(in oklab, var(--accent) 10%, var(--bg));
+  --color-accent-foreground: var(--text);
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  --radius: 12px;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}

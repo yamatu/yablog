@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { MdContentCopy, MdDone } from "react-icons/md";
 
 const normalizeCssLength = (v: string) => {
@@ -30,17 +31,29 @@ const parseSizing = (title?: string | null) => {
   return { width: w ? normalizeCssLength(w) : null, height: h ? normalizeCssLength(h) : null };
 };
 
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    span: [...(defaultSchema.attributes?.span ?? []), "className", "style"],
+    div: [...(defaultSchema.attributes?.div ?? []), "className", "style"],
+    code: [...(defaultSchema.attributes?.code ?? []), "className"],
+  },
+};
+
 export function Markdown({
   value,
   components,
   onImageClick,
   isImageClickable,
+  sanitize,
 }: {
   value: string;
   components?: Components;
   onImageClick?: (src: string) => void;
   // Allow callers to opt-out specific images (e.g. post cover/banner).
   isImageClickable?: (src: string) => boolean;
+  sanitize?: boolean;
 }) {
   const InlineCode = ({ className, children }: { className?: string; children?: any }) => {
     const raw = String(children ?? "");
@@ -155,10 +168,14 @@ export function Markdown({
     code: (props: any) => <Code {...props} />,
   };
 
+  const rehypePluginList: any[] = sanitize
+    ? [rehypeKatex, [rehypeSanitize, sanitizeSchema]]
+    : [rehypeKatex];
+
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkMath]}
+      rehypePlugins={rehypePluginList}
       components={{ ...defaults, ...(components ?? {}) }}
     >
       {value}

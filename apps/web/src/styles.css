@@ -2283,18 +2283,35 @@ a:focus-visible {
   }
 }
 
-/* ── Archive ── */
-.archiveGroup { margin-bottom: 28px; }
+/* ── Archive (timeline style) ── */
+.archiveGroup {
+  margin-bottom: 28px;
+  padding-left: 24px;
+  border-left: 3px solid color-mix(in oklab, var(--accent) 30%, var(--border));
+  position: relative;
+}
 .archiveGroup:last-child { margin-bottom: 0; }
 .archiveGroupHeader {
   display: flex; align-items: baseline;
   justify-content: space-between; gap: 12px;
   margin-bottom: 14px;
+  position: relative;
+}
+.archiveGroupHeader::before {
+  content: "";
+  position: absolute;
+  left: -32px;
+  top: 4px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--card);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .archiveGroupTitle { font-size: 18px; font-weight: 800; color: var(--text-highlight); }
 
 /* ── Chip Cloud Card (Tags/Categories page wrapper) ── */
-.chipCloudCard { padding: 30px; min-height: 300px; }
+.chipCloudCard { padding: 30px; min-height: 300px; border-top: 3px solid var(--accent); }
 .chipCount {
   font-size: 13px; font-weight: 700; color: var(--muted);
   margin-bottom: 16px;
@@ -2305,6 +2322,8 @@ a:focus-visible {
   display: flex; align-items: baseline;
   justify-content: space-between; gap: 12px;
   margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 .listResultsCount { font-size: 14px; color: var(--muted); font-weight: 600; }
 
@@ -2379,7 +2398,7 @@ a:focus-visible {
 }
 
 .colorChip:hover {
-  transform: translateY(-2px);
+  transform: translateY(-2px) scale(1.05);
   box-shadow: var(--shadow-hover);
   border-color: color-mix(in oklab, var(--border) 30%, hsl(var(--h) 80% 55%));
 }
@@ -2388,7 +2407,7 @@ a:focus-visible {
 .archiveGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .postSquare {
@@ -2398,12 +2417,16 @@ a:focus-visible {
   overflow: hidden;
   background: var(--card);
   box-shadow: var(--shadow);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .postSquare:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-hover);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+}
+
+.postSquare:hover .postSquareImg {
+  filter: brightness(1.05);
 }
 
 .postSquareImg {
