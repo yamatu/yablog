@@ -30,7 +30,7 @@ export function AboutPage() {
             {about ? (
               <Markdown value={about.contentMd} />
             ) : (
-              <div style={{ textAlign: "center", padding: 40 }}>
+              <div className="emptyState">
                 <div className="muted">你还没有设置关于页内容。</div>
                 <div style={{ height: 16 }} />
                 <Link to="/admin" className="pill">

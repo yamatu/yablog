@@ -530,14 +530,14 @@ export function AiPage() {
             <div className="aiHeaderRight">
               {!index.autoSave ? (
                 <button className="btn-ghost" type="button" onClick={persistCurrent} disabled={!dirty} title="保存当前记忆到本机">
-                  <MdSave /> 保存
+                  <MdSave /> <span className="aiHideLabel">保存</span>
                 </button>
               ) : null}
               <button className="btn-ghost" type="button" onClick={clearCurrent} title="清空当前记忆">
-                <MdDelete /> 清空当前
+                <MdDelete /> <span className="aiHideLabel">清空当前</span>
               </button>
               <button className="btn-danger" type="button" onClick={clearAll} title="全局清空（删除所有记忆）">
-                <MdClearAll /> 全局清空
+                <MdClearAll /> <span className="aiHideLabel">全局清空</span>
               </button>
             </div>
           </div>
@@ -681,7 +681,7 @@ export function AiPage() {
                 </label>
               </div>
               <div className="muted" style={{ minWidth: 120 }}>
-                {dirty && !index.autoSave ? "未保存" : "\u00A0"}
+                {dirty && !index.autoSave ? <span className="aiHideLabel">未保存</span> : "\u00A0"}
               </div>
               <div style={{ flex: 1 }} />
               <button className="btn-primary" disabled={busy || !input.trim()}>

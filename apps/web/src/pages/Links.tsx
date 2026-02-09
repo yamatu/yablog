@@ -82,50 +82,29 @@ export function LinksPage() {
             </div>
             <div style={{ height: 14 }} />
 
-            {links.length === 0 && !loading ? <div className="muted">暂无友情链接</div> : null}
+            {links.length === 0 && !loading ? <div className="emptyState">暂无友情链接</div> : null}
 
-            <div className="grid">
+            <div className="linkGrid">
               {links.map((l) => (
                 <a
                   key={l.id}
                   href={l.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="card"
-                  style={{ padding: 18, textDecoration: "none" }}
+                  className="card linkCard"
                 >
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    <div
-                      style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        background: "rgba(255,255,255,0.08)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        overflow: "hidden",
-                        flex: "0 0 auto",
-                      }}
-                    >
+                  <div className="linkCardInner">
+                    <div className="linkIcon">
                       {l.iconUrl ? (
-                        <img src={l.iconUrl} alt="" style={{ width: 22, height: 22 }} />
+                        <img src={l.iconUrl} alt="" />
                       ) : (
-                        <div style={{ fontWeight: 900, opacity: 0.7 }}>{(l.title || "?").slice(0, 1).toUpperCase()}</div>
+                        <div className="linkIconFallback">{(l.title || "?").slice(0, 1).toUpperCase()}</div>
                       )}
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {l.title}
-                      </div>
-                      <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {l.url}
-                      </div>
-                      {l.description ? (
-                        <div className="muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
-                          {l.description}
-                        </div>
-                      ) : null}
+                    <div className="linkMeta">
+                      <div className="linkTitle">{l.title}</div>
+                      <div className="linkUrl">{l.url}</div>
+                      {l.description ? <div className="linkDesc">{l.description}</div> : null}
                     </div>
                   </div>
                 </a>
@@ -214,25 +193,24 @@ export function LinksPage() {
             {requests.length === 0 ? <div className="muted">暂无留言</div> : null}
             <div style={{ display: "grid", gap: 12 }}>
               {requests.map((r) => (
-                <div key={r.id} className="glass" style={{ padding: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 800 }}>
+                <div key={r.id} className="glass linkMessage">
+                  <div className="linkMessageHeader">
+                    <div className="linkMessageName">
                       <a href={r.url} target="_blank" rel="noreferrer">
                         {r.name}
                       </a>
                     </div>
-                    <div className="muted" style={{ fontSize: 12 }}>
+                    <div className="linkMessageDate">
                       {new Date(r.createdAt).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" })}
                     </div>
                   </div>
-                  {r.description ? <div className="muted" style={{ marginTop: 6 }}>{r.description}</div> : null}
+                  {r.description ? <div className="linkMessageDesc">{r.description}</div> : null}
                   {r.message ? (
-                    <>
-                      <div style={{ height: 8 }} />
+                    <div className="linkMessageBody">
                       <div className="markdown" style={{ padding: 0, background: "transparent", border: 0 }}>
                         <Markdown value={r.message} />
                       </div>
-                    </>
+                    </div>
                   ) : null}
                 </div>
               ))}

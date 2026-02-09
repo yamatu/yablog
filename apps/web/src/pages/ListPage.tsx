@@ -113,14 +113,15 @@ export function ArchivePage() {
     <PageLayout title="归档" bg={site?.images.archiveHero}>
       {err ? <div className="card" style={{ padding: 20 }}>加载失败：{err}</div> : null}
 
-      <div className="card" style={{ padding: "26px" }}>
+      {items.length === 0 && !err ? <div className="card emptyState">暂无文章</div> : null}
+
+      <div className="card content">
         {groups.map((g) => (
-          <div key={g.key} style={{ marginBottom: 26 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>{groupTitle(g.key)}</div>
+          <div key={g.key} className="archiveGroup">
+            <div className="archiveGroupHeader">
+              <div className="archiveGroupTitle">{groupTitle(g.key)}</div>
               <div className="muted">{g.posts.length} 篇</div>
             </div>
-            <div style={{ height: 12 }} />
             <div className="archiveGrid">
               {g.posts.map((p, i) => (
                 <PostCard key={p.id} post={p} index={i} variant="square" />
@@ -260,8 +261,10 @@ export function TagListPage() {
 
   return (
     <PageLayout title="标签" bg={site?.images.tagsHero}>
-      <div className="card" style={{ minHeight: 400, padding: 40 }}>
+      <div className="card chipCloudCard">
         {err ? <div className="muted">加载失败：{err}</div> : null}
+        {items.length > 0 && <div className="chipCount">{items.length} 个标签</div>}
+        {items.length === 0 && !err ? <div className="emptyState">暂无标签</div> : null}
         <div className="chipCloud">
           {items.map((t) => (
             <Link
@@ -305,8 +308,10 @@ export function CategoryListPage() {
 
   return (
     <PageLayout title="分类" bg={site?.images.tagsHero}>
-      <div className="card" style={{ minHeight: 400, padding: 40 }}>
+      <div className="card chipCloudCard">
         {err ? <div className="muted">加载失败：{err}</div> : null}
+        {items.length > 0 && <div className="chipCount">{items.length} 个分类</div>}
+        {items.length === 0 && !err ? <div className="emptyState">暂无分类</div> : null}
         <div className="chipCloud">
           {items.map((c) => (
             <Link
@@ -353,11 +358,17 @@ export function TagPage() {
   return (
     <PageLayout title={`标签：${tag}`} bg={site?.images.tagsHero}>
       {err ? <div className="card" style={{ padding: 20 }}>加载失败：{err}</div> : null}
+      {items.length > 0 && (
+        <div className="listResultsHeader">
+          <div className="listResultsCount">共 {items.length} 篇文章</div>
+        </div>
+      )}
       <div className="grid">
         {items.map((p, i) => (
           <PostCard key={p.id} post={p} index={i} />
         ))}
       </div>
+      {items.length === 0 && !err ? <div className="card emptyState">没有找到相关文章</div> : null}
     </PageLayout>
   );
 }
@@ -391,11 +402,17 @@ export function CategoryPage() {
   return (
     <PageLayout title={`分类：${category}`} bg={site?.images.tagsHero}>
       {err ? <div className="card" style={{ padding: 20 }}>加载失败：{err}</div> : null}
+      {items.length > 0 && (
+        <div className="listResultsHeader">
+          <div className="listResultsCount">共 {items.length} 篇文章</div>
+        </div>
+      )}
       <div className="grid">
         {items.map((p, i) => (
           <PostCard key={p.id} post={p} index={i} />
         ))}
       </div>
+      {items.length === 0 && !err ? <div className="card emptyState">没有找到相关文章</div> : null}
     </PageLayout>
   );
 }
