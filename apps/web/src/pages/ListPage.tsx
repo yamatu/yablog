@@ -120,7 +120,7 @@ export function ArchivePage() {
           <div key={g.key} className="archiveGroup">
             <div className="archiveGroupHeader">
               <div className="archiveGroupTitle">{groupTitle(g.key)}</div>
-              <span className="pill" style={{ fontSize: 12 }}>{g.posts.length} 篇</span>
+              <div className="muted">{g.posts.length} 篇</div>
             </div>
             <div className="archiveGrid">
               {g.posts.map((p, i) => (

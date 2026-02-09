@@ -208,7 +208,7 @@ export function LinksPage() {
                   {r.message ? (
                     <div className="linkMessageBody">
                       <div className="markdown" style={{ padding: 0, background: "transparent", border: 0 }}>
-                        <Markdown value={r.message} sanitize />
+                        <Markdown value={r.message} />
                       </div>
                     </div>
                   ) : null}

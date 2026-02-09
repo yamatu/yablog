@@ -22,14 +22,16 @@ import { HomePage } from "./pages/Home";
 import { PostPage } from "./pages/Post";
 import { LinksPage } from "./pages/Links";
 import { AiPage } from "./pages/Ai";
-import { AdminCommentsPage } from "./pages/admin/AdminComments";
-import { AdminLinksPage } from "./pages/admin/AdminLinks";
-import { AdminSecurityPage } from "./pages/admin/AdminSecurity";
-import { AdminIndexPage } from "./pages/admin/AdminDashboard";
-import { AdminEditorPage } from "./pages/admin/AdminEditor";
-import { AdminLoginPage } from "./pages/admin/AdminLogin";
-import { AdminMediaPage } from "./pages/admin/AdminMedia";
-import { AdminSettingsPage } from "./pages/admin/AdminSettings";
+import {
+  AdminCommentsPage,
+  AdminEditorPage,
+  AdminIndexPage,
+  AdminLinksPage,
+  AdminLoginPage,
+  AdminMediaPage,
+  AdminSecurityPage,
+  AdminSettingsPage,
+} from "./pages/admin/Admin";
 
 import {
   rootLoader,

@@ -230,7 +230,7 @@ export function PostPage() {
                   </div>
                   <div style={{ height: 8 }} />
                   <div className="markdown" style={{ padding: 0, background: "transparent", border: 0 }}>
-                    <Markdown value={c.contentMd} sanitize />
+                    <Markdown value={c.contentMd} />
                   </div>
                 </div>
               ))}
