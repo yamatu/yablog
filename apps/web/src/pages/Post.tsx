@@ -324,13 +324,6 @@ export function PostPage() {
                     key={item.id}
                     className={`tocLink tocL${item.level}`}
                     href={`#${item.id}`}
-                    style={{ 
-                      display: 'block', 
-                      padding: '4px 0', 
-                      fontSize: '0.9rem',
-                      color: 'var(--muted)',
-                      paddingLeft: (item.level - 1) * 15
-                    }}
                   >
                     {item.text}
                   </a>

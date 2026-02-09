@@ -142,6 +142,14 @@
   .loadingSpinner {
     animation: none;
   }
+
+  .post-list > .card {
+    animation: none;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 .loadingCenter {
@@ -177,6 +185,45 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Custom selection color */
+::selection {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+  color: var(--text-highlight);
+}
+
+/* Custom scrollbar (webkit) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted) 35%, transparent);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+
+/* Firefox scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted) 35%, transparent) transparent;
+  scroll-behavior: smooth;
+}
+
+/* Heading anchor offset for fixed nav */
+.markdown h1[id],
+.markdown h2[id],
+.markdown h3[id] {
+  scroll-margin-top: 80px;
 }
 
 html,
@@ -310,6 +357,42 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 15px;
+}
+
+.navRight .search {
+  position: relative;
+}
+
+.navRight .search input {
+  width: 160px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  background: color-mix(in oklab, var(--bg2) 60%, transparent);
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+  transition: width 0.3s, border-color 0.3s, background 0.3s;
+}
+
+.nav.transparent .navRight .search input {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.nav.transparent .navRight .search input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.navRight .search input:focus {
+  width: 200px;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+/* Nav active link */
+.navLinks a.active::after {
+  width: 100%;
 }
 
 .iconButton.navToggle {
@@ -661,6 +744,16 @@ a:hover {
   min-width: 0;
 }
 
+/* Staggered fade-in for post cards */
+.post-list > .card {
+  animation: slideUp 0.5s ease-out both;
+}
+
+.post-list > .card:nth-child(2) { animation-delay: 0.05s; }
+.post-list > .card:nth-child(3) { animation-delay: 0.1s; }
+.post-list > .card:nth-child(4) { animation-delay: 0.15s; }
+.post-list > .card:nth-child(5) { animation-delay: 0.2s; }
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -753,6 +846,18 @@ a:hover {
   transform: translateY(-2px);
 }
 
+/* Inline glass elements (comments, link messages) should have subtler hover */
+.glass[style*="padding: 14px"]:hover,
+.glass[style*="padding:14px"]:hover {
+  transform: translateY(-1px);
+}
+
+/* Muted text */
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 /* Post List Item Specifics */
 .post-list .card {
   display: flex;
@@ -835,6 +940,14 @@ a:hover {
   justify-content: center;
 }
 
+.card-info .card-summary {
+  transition: color 0.3s;
+}
+
+.card:hover .card-info .card-summary {
+  color: var(--text-highlight);
+}
+
 .cardTitle {
   font-size: 1.5rem;
   margin: 0 0 10px;
@@ -876,8 +989,23 @@ a:hover {
   border-top: 1px solid var(--border);
 }
 
+.pager button {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.25s;
+}
+
+.pager button:not([disabled]):hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
 .pager button[disabled] {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -917,18 +1045,36 @@ a:hover {
   gap: 8px;
 }
 
+.widget-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  background: var(--accent);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 /* Profile Widget */
 .profile-widget {
   text-align: center;
+}
+
+.profile-avatar {
+  display: inline-block;
+  padding: 3px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 }
 
 .profile-avatar img {
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  border: 2px solid var(--border);
-  padding: 2px;
+  border: 3px solid var(--card);
+  padding: 0;
   transition: transform 0.5s;
+  display: block;
 }
 
 .profile-widget:hover .profile-avatar img {
@@ -978,11 +1124,15 @@ a:hover {
   border-radius: 20px;
   transition: 0.3s;
   display: block;
+  font-weight: 600;
+  text-align: center;
 }
 
 .btn-follow:hover {
   background: var(--accent-hover);
+  color: white;
   box-shadow: 0 3px 10px rgba(73, 177, 245, 0.4);
+  transform: translateY(-1px);
 }
 
 /* UI Elements */
@@ -1020,6 +1170,18 @@ button:hover,
 .pill:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+button:focus-visible,
+.pill:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* Shared button variants (public + admin; admin has more specific overrides). */
@@ -1227,6 +1389,34 @@ button:hover,
   .post-header {
     background-position: 50% 50% !important;
   }
+
+  .butterfly-hero {
+    height: 75vh;
+  }
+
+  .hero-title {
+    font-size: 2.2rem;
+  }
+
+  .hero-subtitle {
+    font-size: 1rem;
+  }
+
+  .page-banner {
+    height: 300px;
+  }
+
+  .post-header {
+    height: 320px;
+  }
+
+  .post-title {
+    font-size: 1.8rem;
+  }
+
+  .post-meta {
+    font-size: 0.85rem;
+  }
 }
 
 /* Markdown & Footer */
@@ -1240,8 +1430,16 @@ button:hover,
   hyphens: auto;
 }
 
+/* Card content section (comments, link requests, etc.) */
+.content {
+  padding: 26px 34px;
+}
+
 @media (max-width: 900px) {
   .markdown {
+    padding: 20px;
+  }
+  .content {
     padding: 20px;
   }
 }
@@ -1263,6 +1461,64 @@ button:hover,
 .markdown a:hover {
   color: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+
+/* Blockquote */
+.markdown blockquote {
+  margin: 18px 0;
+  padding: 14px 20px;
+  border-left: 4px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 6%, var(--bg));
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text);
+}
+
+.markdown blockquote p {
+  margin: 0;
+}
+
+/* Horizontal rule */
+.markdown hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin: 30px 0;
+}
+
+/* Lists */
+.markdown ul,
+.markdown ol {
+  padding-left: 24px;
+}
+
+.markdown li {
+  margin-bottom: 4px;
+}
+
+.markdown li::marker {
+  color: var(--accent);
+}
+
+/* Task list (GFM) */
+.markdown ul:has(input[type="checkbox"]) {
+  list-style: none;
+  padding-left: 6px;
+}
+
+.markdown ul:has(input[type="checkbox"]) input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin-right: 8px;
+}
+
+/* Clickable images */
+.markdown img[style*="cursor"] {
+  border-radius: 8px;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.markdown img[style*="cursor"]:hover {
+  transform: scale(1.01);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 .markdown .inlineCode {
@@ -1406,6 +1662,10 @@ button:hover,
     padding: 16px;
   }
 
+  .content {
+    padding: 16px;
+  }
+
   .markdown .codeBlockBar {
     flex-wrap: wrap;
     justify-content: flex-start;
@@ -1456,12 +1716,57 @@ button:hover,
   height: 26px;
 }
 
+/* TOC (Table of Contents) */
+.tocList {
+  border-left: 2px solid var(--border);
+  padding-left: 2px;
+}
+
+.tocLink {
+  display: block;
+  padding: 4px 0 4px 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  border-left: 2px solid transparent;
+  margin-left: -2px;
+  transition: color 0.2s, border-color 0.2s;
+  line-height: 1.6;
+}
+
+.tocLink:hover {
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+
+.tocL2 {
+  padding-left: 27px;
+}
+
+.tocL3 {
+  padding-left: 42px;
+}
+
 .footer {
   text-align: center;
   padding: 40px 0;
   background: linear-gradient(to top, var(--bg2), transparent);
   color: var(--muted);
   margin-top: auto;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+}
+
+.footer p {
+  margin: 0;
+}
+
+.footer a {
+  color: var(--accent);
+  transition: color 0.2s;
+}
+
+.footer a:hover {
+  color: var(--accent-hover);
 }
 
 /* AI Chat */
@@ -2105,12 +2410,14 @@ button:hover,
   justify-content: center;
   border: 1px solid var(--border);
   background: var(--bg);
+  transition: all 0.25s;
 }
 
 .social-row a:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+  transform: translateY(-2px);
 }
 
 .social-row svg {
@@ -2139,10 +2446,12 @@ button:hover,
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--bg);
+  transition: all 0.25s;
 }
 
 .quick-links a:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+  transform: translateX(4px);
 }
