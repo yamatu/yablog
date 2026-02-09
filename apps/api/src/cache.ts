@@ -19,6 +19,10 @@ export type Cache = {
     resetSec: number;
   }>;
   recordSuspicious: (args: { ip: string; bucket: string; kind: string }) => Promise<void>;
+  checkAndAutoBan: (args: {
+    ip: string;
+    onBan: (ip: string, reason: string) => void;
+  }) => Promise<boolean>;
   listSuspiciousIps: (args: { limit: number }) => Promise<
     {
       ip: string;
@@ -61,6 +65,7 @@ export const createCache = async (): Promise<Cache> => {
     wrapJSON: async (_ns, _raw, _ttl, compute) => Promise.resolve(compute()),
     rateLimit: async (args) => ({ allowed: true, count: 0, remaining: args.limit, resetSec: args.windowSec }),
     recordSuspicious: async () => {},
+    checkAndAutoBan: async () => false,
     listSuspiciousIps: async () => [],
   };
   if (!url) return noop;
@@ -166,9 +171,37 @@ export const createCache = async (): Promise<Cache> => {
       if (card > 5000) {
         await client.zRemRangeByRank(z, 0, card - 5001);
       }
+
+      // Progressive punishment: when blocked (not served from cache), inflate the
+      // global per-IP rate-limit counter so repeat offenders hit limits faster.
+      if (args.kind.endsWith("block")) {
+        const gk = `${prefix}rl:global:${ip}`;
+        await client.incrBy(gk, 5).catch(() => {});
+      }
     } catch {
       // ignore
     }
+  };
+
+  const checkAndAutoBan = async (args: {
+    ip: string;
+    onBan: (ip: string, reason: string) => void;
+  }): Promise<boolean> => {
+    const ip = args.ip || "unknown";
+    const z = `${prefix}abuse:z`;
+    try {
+      const score = await client.zScore(z, ip);
+      if (score !== null && score >= 50) {
+        const reason = `auto: score=${score}`;
+        args.onBan(ip, reason);
+        // Remove from abuse set after banning to avoid repeated callbacks.
+        await client.zRem(z, ip).catch(() => {});
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
   };
 
   const listSuspiciousIps = async (args: { limit: number }) => {
@@ -200,5 +233,5 @@ export const createCache = async (): Promise<Cache> => {
     return items;
   };
 
-  return { enabled: true, getVersion, bump, getJSON, setJSON, key, wrapJSON, rateLimit, recordSuspicious, listSuspiciousIps };
+  return { enabled: true, getVersion, bump, getJSON, setJSON, key, wrapJSON, rateLimit, recordSuspicious, checkAndAutoBan, listSuspiciousIps };
 };

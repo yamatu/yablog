@@ -51,7 +51,19 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
   };
 
   // Prefer POST to avoid aggressive CDN caching (Cloudflare "Cache Everything" only affects GET/HEAD).
-  router.post("/captcha", (_req, res) => issueCaptcha(res));
+  router.post("/captcha", async (req, res) => {
+    const ip = ipKey(req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "captcha:w", key: ip, limit: 20, windowSec: 60 }),
+      cache.rateLimit({ bucket: "captcha:w:g", key: "global", limit: 500, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
+      void cache.recordSuspicious({ ip, bucket: "captcha:w", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
+      return res.status(429).json({ error: "rate_limited" });
+    }
+    return issueCaptcha(res);
+  });
   // Keep GET for backward compatibility (still marked no-store).
   router.get("/captcha", (_req, res) => issueCaptcha(res));
 
@@ -130,10 +142,21 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
     res.json(data);
   });
 
-  router.post("/posts/:slug/comments", (req, res) => {
+  router.post("/posts/:slug/comments", async (req, res) => {
     const { slug } = z.object({ slug: z.string().min(1) }).parse(req.params);
     const post = getPostBySlug(db, slug);
     if (!post || post.status !== "published") return res.status(404).json({ error: "not_found" });
+
+    const ip = ipKey(req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "comments:w", key: ip, limit: 5, windowSec: 60 }),
+      cache.rateLimit({ bucket: "comments:w:g", key: "global", limit: 100, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
+      void cache.recordSuspicious({ ip, bucket: "comments:w", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
+      return res.status(429).json({ error: "rate_limited" });
+    }
 
     const body = z
       .object({
@@ -333,7 +356,18 @@ export const mountPublicRoutes = (router: Router, db: Db, cache: Cache) => {
     res.json(data);
   });
 
-  router.post("/links/requests", (req, res) => {
+  router.post("/links/requests", async (req, res) => {
+    const ip = ipKey(req.ip);
+    const [rlIp, rlGlobal] = await Promise.all([
+      cache.rateLimit({ bucket: "linkRequests:w", key: ip, limit: 3, windowSec: 60 }),
+      cache.rateLimit({ bucket: "linkRequests:w:g", key: "global", limit: 50, windowSec: 60 }),
+    ]);
+    if (!rlIp.allowed || !rlGlobal.allowed) {
+      void cache.recordSuspicious({ ip, bucket: "linkRequests:w", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+      res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
+      return res.status(429).json({ error: "rate_limited" });
+    }
+
     const body = z
       .object({
         name: z.string().min(1).max(40),

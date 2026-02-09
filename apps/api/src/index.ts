@@ -388,6 +388,35 @@ app.use((req, res, next) => {
   }
   return next();
 });
+
+// Auto-ban callback: called by cache.checkAndAutoBan when an IP's abuse score exceeds threshold.
+const onAutoBan = (ip: string, reason: string) => {
+  try {
+    upsertIpBan(db, { ip, reason });
+    bannedIpSet.add(ip);
+    // eslint-disable-next-line no-console
+    console.warn(`[yablog-api] auto-banned ip=${ip} reason=${reason}`);
+  } catch (e: any) {
+    // eslint-disable-next-line no-console
+    console.error("[yablog-api] auto-ban write failed", e?.message ?? e);
+  }
+};
+
+// Global rate limit: caps total requests per IP (across all endpoints) and globally.
+app.use(async (req, res, next) => {
+  const ip = ipKey(req.ip);
+  const [rlIp, rlGlobal] = await Promise.all([
+    cache.rateLimit({ bucket: "global", key: ip, limit: 300, windowSec: 60 }),
+    cache.rateLimit({ bucket: "global:g", key: "global", limit: 6000, windowSec: 60 }),
+  ]);
+  if (!rlIp.allowed || !rlGlobal.allowed) {
+    void cache.recordSuspicious({ ip, bucket: "global", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+    void cache.checkAndAutoBan({ ip, onBan: onAutoBan });
+    res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
+    return res.status(429).json({ error: "rate_limited" });
+  }
+  return next();
+});
 app.use(
   helmet({
     // We allow users to configure remote images (Unsplash/DiceBear/any https URL), so the strict defaults
@@ -549,6 +578,7 @@ app.post("/api/chat", async (req, res) => {
 
   if (!rlIp.allowed || !rlGlobal.allowed) {
     void cache.recordSuspicious({ ip, bucket: "chat", kind: (!rlGlobal.allowed ? "global_" : "ip_") + "block" });
+    void cache.checkAndAutoBan({ ip, onBan: onAutoBan });
     res.setHeader("retry-after", String((!rlGlobal.allowed ? rlGlobal.resetSec : rlIp.resetSec) || 60));
     return res.status(429).json({ error: "rate_limited" });
   }
