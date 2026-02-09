@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
   const { user, loading } = useMe();
@@ -135,130 +136,120 @@ export function AdminEditorPage({ mode }: { mode: "new" | "edit" }) {
     <AdminLayoutWrapper>
       <AdminNav onLogout={onLogout} />
 
-      {/* ── Top action bar ── */}
-      <div className="flex justify-between items-center gap-3 flex-wrap mb-5 p-4 rounded-xl bg-card border border-border">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => navigate("/admin")}>← 返回</Button>
-          <h2 className="text-lg font-bold">{mode === "new" ? "撰写新文章" : "编辑文章"}</h2>
-          {mode === "edit" && (
-            <Badge variant={status === "published" ? "default" : "secondary"}>
-              {status === "published" ? "已发布" : "草稿"}
-            </Badge>
-          )}
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {mode === "edit" && post && (
-            <Link to={`/post/${post.slug}`} target="_blank">
-              <Button variant="ghost" size="sm">预览页面</Button>
-            </Link>
-          )}
-          <Button variant="outline" onClick={() => onSave()} disabled={saving}>
-            {saving ? "保存中…" : "保存草稿"}
-          </Button>
-          <Button onClick={() => onSave({ publish: true })} disabled={saving}>
-            {saving ? "保存中…" : "保存并发布"}
-          </Button>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex justify-between items-center gap-3 flex-wrap mb-6">
+            <div>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/admin")} className="mb-1 text-muted-foreground">← 返回列表</Button>
+              <h2 className="text-xl font-bold">{mode === "new" ? "撰写新文章" : "编辑文章"}</h2>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {mode === "edit" && post && (
+                <Link to={`/post/${post.slug}`} target="_blank">
+                  <Button variant="outline" size="sm">预览页面</Button>
+                </Link>
+              )}
+              <Button variant="outline" onClick={() => onSave()} disabled={saving}>
+                {saving ? "保存中…" : "保存更改"}
+              </Button>
+              <Button onClick={() => onSave({ publish: true })} disabled={saving}>
+                {saving ? "保存中…" : "保存并发布"}
+              </Button>
+            </div>
+          </div>
 
-      {/* ── Title input (hero style) ── */}
-      <div className="mb-5">
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="在此输入文章标题..."
-          className="text-2xl font-bold h-14 px-5 bg-card border border-border rounded-xl focus-visible:ring-1 focus-visible:ring-ring"
-        />
-      </div>
+          <div className="grid gap-5">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="在此输入文章标题..."
+              className="text-2xl font-bold h-14 px-4"
+            />
 
-      {/* ── 2-column layout: Editor + Sidebar ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[5fr_2fr] gap-5 items-start">
-        {/* Main editor */}
-        <div className="min-w-0">
-          <MarkdownEditor value={contentMd} onChange={setContentMd} placeholder="开始写作..." minHeight={600} />
-        </div>
+            <div className="adminEditorColumns grid gap-5" style={{ gridTemplateColumns: "2fr 1fr" }}>
+              <div className="flex flex-col gap-2">
+                <MarkdownEditor value={contentMd} onChange={setContentMd} placeholder="开始写作..." minHeight={600} />
+              </div>
 
-        {/* Sidebar settings */}
-        <div className="flex flex-col gap-4 lg:sticky lg:top-5">
-          {/* Article settings */}
-          <Card>
-            <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">文章设置</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 grid gap-3">
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">Slug (URL 路径)</Label>
-                <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="example-post" className="h-8 text-sm" />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">摘要</Label>
-                <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="文章简介..." rows={2} className="text-sm" />
-              </div>
-              <ImageField
-                label="封面图片"
-                value={coverImage}
-                onChange={setCoverImage}
-                placeholder="https://... 或 /uploads/..."
-                help="建议使用图库上传"
-              />
-            </CardContent>
-          </Card>
+              <div className="flex flex-col gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">文章设置</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Slug (URL路径)</Label>
+                      <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="example-post" />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">摘要</Label>
+                      <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="文章简介..." rows={3} />
+                    </div>
+                    <ImageField
+                      label="顶部图片 (Cover)"
+                      value={coverImage}
+                      onChange={setCoverImage}
+                      placeholder="https://... 或 /uploads/..."
+                      help="建议使用图库上传（会自动压缩并生成缩略图）"
+                    />
+                  </CardContent>
+                </Card>
 
-          {/* Categories & Tags */}
-          <Card>
-            <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">分类与标签</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 grid gap-3">
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">分类（逗号分隔）</Label>
-                <Input value={categories} onChange={(e) => setCategories(e.target.value)} placeholder="技术, 生活" className="h-8 text-sm" />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">标签（逗号分隔）</Label>
-                <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="React, Node.js" className="h-8 text-sm" />
-              </div>
-            </CardContent>
-          </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">分类与标签</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">分类 (逗号分隔)</Label>
+                      <Input value={categories} onChange={(e) => setCategories(e.target.value)} placeholder="技术, 生活" />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">标签 (逗号分隔)</Label>
+                      <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="React, Node.js" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-          {/* Publish status */}
-          <Card>
-            <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">发布状态</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 grid gap-3">
-              <div className="flex items-center gap-2">
-                <Checkbox checked={featured} onCheckedChange={(c) => setFeatured(!!c)} id="featured" />
-                <Label htmlFor="featured" className="text-sm cursor-pointer">置顶文章</Label>
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">发布时间</Label>
-                <Input type="datetime-local" value={publishedAtLocal} onChange={(e) => setPublishedAtLocal(e.target.value)} className="h-8 text-sm" />
-                <p className="text-xs text-muted-foreground">留空则发布时自动取当前时间</p>
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">排序权重</Label>
-                <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} className="h-8 text-sm" />
-                <p className="text-xs text-muted-foreground">数字越大越靠前</p>
-              </div>
-            </CardContent>
-          </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">发布状态</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    <div className="text-sm text-muted-foreground">
+                      当前状态：<Badge variant={status === "published" ? "default" : "secondary"}>{status === "published" ? "已发布" : "草稿"}</Badge>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">发布时间（可留空，发布时自动取当前时间）</Label>
+                      <Input type="datetime-local" value={publishedAtLocal} onChange={(e) => setPublishedAtLocal(e.target.value)} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={featured} onCheckedChange={(c) => setFeatured(!!c)} id="featured" />
+                      <Label htmlFor="featured" className="text-sm cursor-pointer">置顶文章 (首页置顶)</Label>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground">排序权重（数字越大越靠前）</Label>
+                      <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
+                    </div>
+                  </CardContent>
+                </Card>
 
-          {/* Delete button */}
-          {mode === "edit" ? (
-            <Button variant="destructive" size="sm" onClick={onDelete} className="w-full">
-              删除此文章
-            </Button>
-          ) : null}
-        </div>
-      </div>
+                {mode === "edit" ? (
+                  <Button variant="destructive" onClick={onDelete} className="w-full">
+                    删除此文章
+                  </Button>
+                ) : null}
+              </div>
+            </div>
 
-      {/* ── Error display ── */}
-      {err ? (
-        <div className="mt-5 p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive text-sm">
-          错误：{err}
-        </div>
-      ) : null}
+            {err ? (
+              <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive text-sm">
+                错误：{err}
+              </div>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
     </AdminLayoutWrapper>
   );
 }
