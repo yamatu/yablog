@@ -196,9 +196,21 @@ async function json<T>(
   input: string | URL,
   init?: RequestInit,
 ): Promise<T> {
+  const internalSsrToken = import.meta.env.SSR
+    ? ((globalThis as any)?.process?.env?.YABLOG_SSR_INTERNAL_TOKEN ?? "")
+    : "";
+
+  const mergedHeaders: Record<string, string> = {
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  if (internalSsrToken) {
+    mergedHeaders["x-yablog-internal-ssr"] = internalSsrToken;
+  }
+
   const url = resolveUrl(baseUrl, input);
   const res = await fetchImpl(url, {
     ...init,
+    headers: mergedHeaders,
     credentials: init?.credentials ?? "include",
   });
   if (!res.ok) {

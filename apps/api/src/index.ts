@@ -380,7 +380,19 @@ if (!hasAnyUsers(db)) {
 
 const app = express();
 app.set("trust proxy", true);
+
+// Internal token for server-side SSR -> API fetches.
+// This avoids self-ban / rate-limit false positives for loopback requests.
+const ssrInternalToken = `${crypto.randomUUID()}-${crypto.randomBytes(12).toString("hex")}`;
+process.env.YABLOG_SSR_INTERNAL_TOKEN = ssrInternalToken;
+
+const isInternalSsrRequest = (req: express.Request) => {
+  const token = req.get("x-yablog-internal-ssr") ?? "";
+  return Boolean(token) && token === ssrInternalToken;
+};
+
 app.use((req, res, next) => {
+  if (isInternalSsrRequest(req)) return next();
   const ip = ipKey(req.ip);
   if (bannedIpSet.has(ip)) {
     res.setHeader("connection", "close");
@@ -404,6 +416,7 @@ const onAutoBan = (ip: string, reason: string) => {
 
 // Global rate limit: caps total requests per IP (across all endpoints) and globally.
 app.use(async (req, res, next) => {
+  if (isInternalSsrRequest(req)) return next();
   const ip = ipKey(req.ip);
   const [rlIp, rlGlobal] = await Promise.all([
     cache.rateLimit({ bucket: "global", key: ip, limit: 300, windowSec: 60 }),
