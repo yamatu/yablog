@@ -819,6 +819,13 @@ export type SiteSettings = {
     brandText: string;
     links: { label: string; path: string; icon: string }[];
   };
+  seo: {
+    defaultDescription: string;
+    defaultKeywords: string[];
+    defaultOgImage: string;
+    defaultOgImageAlt: string;
+    twitterHandle: string;
+  };
   tab: {
     title: string;
     awayTitle: string;
@@ -1002,6 +1009,13 @@ export const defaultSiteSettings = (): SiteSettings => ({
       { label: "关于", path: "/about", icon: "info" },
     ],
   },
+  seo: {
+    defaultDescription: "YaBlog 的个人博客，记录技术、代码与生活观察。",
+    defaultKeywords: ["YaBlog", "博客", "技术博客", "编程"],
+    defaultOgImage: "",
+    defaultOgImageAlt: "YaBlog",
+    twitterHandle: "",
+  },
   tab: {
     title: "YaBlog",
     awayTitle: "回来看看吧 · YaBlog",
@@ -1072,6 +1086,15 @@ const mergeSiteSettings = (base: SiteSettings, incoming: any): SiteSettings => {
                   v.path.startsWith("https://")),
             )
         : base.nav.links,
+    },
+    seo: {
+      defaultDescription: String(safe?.seo?.defaultDescription ?? base.seo.defaultDescription),
+      defaultKeywords: Array.isArray(safe?.seo?.defaultKeywords)
+        ? safe.seo.defaultKeywords.map((v: any) => String(v).trim()).filter(Boolean)
+        : base.seo.defaultKeywords,
+      defaultOgImage: String(safe?.seo?.defaultOgImage ?? base.seo.defaultOgImage),
+      defaultOgImageAlt: String(safe?.seo?.defaultOgImageAlt ?? base.seo.defaultOgImageAlt),
+      twitterHandle: String(safe?.seo?.twitterHandle ?? base.seo.twitterHandle),
     },
     tab: {
       title: String(safe?.tab?.title ?? base.tab.title),

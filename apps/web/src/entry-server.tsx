@@ -7,193 +7,7 @@ import {
 } from "react-router-dom/server";
 
 import { ssrRoutes } from "./routes.ssr";
-import type { PostLoaderData, RootLoaderData } from "./loaders";
-
-function escapeHtml(s: string) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function escapeJsonLd(s: string) {
-  return s.replaceAll("</", "<\\/");
-}
-
-function makeHead({
-  url,
-  loaderData,
-}: {
-  url: URL;
-  loaderData: Record<string, unknown> | null | undefined;
-}) {
-  const path = url.pathname;
-  const origin = url.origin;
-
-  // Extract site settings from root loader
-  const rootData = (loaderData?.root ?? null) as RootLoaderData | null;
-  const siteName = rootData?.site?.home?.title || rootData?.site?.nav?.brandText || "YaBlog";
-  const siteDesc = rootData?.site?.home?.subtitle || `${siteName} - A modern blog.`;
-
-  // Helper to build a simple page head
-  const simplePage = (pageTitle: string, canonical: string) => {
-    const title = `${pageTitle} - ${siteName}`;
-    return {
-      title,
-      headTags:
-        `\n<title>${escapeHtml(title)}</title>` +
-        `\n<meta name="description" content="${escapeHtml(siteDesc)}" />` +
-        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:type" content="website" />` +
-        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
-        `\n<meta property="og:description" content="${escapeHtml(siteDesc)}" />` +
-        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
-        `\n`,
-    };
-  };
-
-  // ── Home ──
-  if (path === "/") {
-    const title = siteName;
-    const desc = siteDesc;
-    const jsonLd = {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      name: siteName,
-      description: desc,
-      url: origin + "/",
-    };
-    return {
-      title,
-      headTags:
-        `\n<title>${escapeHtml(title)}</title>` +
-        `\n<meta name="description" content="${escapeHtml(desc)}" />` +
-        `\n<link rel="canonical" href="${escapeHtml(origin + "/")}" />` +
-        `\n<meta property="og:type" content="website" />` +
-        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
-        `\n<meta property="og:description" content="${escapeHtml(desc)}" />` +
-        `\n<meta property="og:url" content="${escapeHtml(origin + "/")}" />` +
-        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
-        `\n<script type="application/ld+json">${escapeJsonLd(JSON.stringify(jsonLd))}</script>` +
-        `\n`,
-    };
-  }
-
-  // ── Post ──
-  if (path.startsWith("/post/")) {
-    const data = (loaderData?.post ?? null) as PostLoaderData | null;
-    const post = data?.post;
-    if (!post) {
-      const title = "文章未找到";
-      return {
-        title,
-        headTags: `\n<title>${escapeHtml(title)}</title>\n<meta name="robots" content="noindex" />\n`,
-      };
-    }
-
-    const title = post.title;
-    const canonical = `${origin}/post/${encodeURIComponent(post.slug)}`;
-    const desc = (post.summary || post.contentMd.slice(0, 160).replace(/\n/g, " ")).trim();
-    let image = (post.coverImage || "").trim();
-    if (image && image.startsWith("/")) image = origin + image;
-
-    const publishedTime = post.publishedAt || post.createdAt;
-    const modifiedTime = post.updatedAt;
-
-    const jsonLd: Record<string, unknown> = {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: title,
-      description: desc,
-      url: canonical,
-      datePublished: publishedTime,
-      dateModified: modifiedTime,
-      author: { "@type": "Person", name: rootData?.site?.sidebar?.name || siteName },
-      publisher: { "@type": "Organization", name: siteName },
-    };
-    if (image) jsonLd.image = image;
-
-    return {
-      title,
-      headTags:
-        `\n<title>${escapeHtml(title)}</title>` +
-        `\n<meta name="description" content="${escapeHtml(desc)}" />` +
-        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:type" content="article" />` +
-        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
-        `\n<meta property="og:description" content="${escapeHtml(desc)}" />` +
-        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
-        (image ? `\n<meta property="og:image" content="${escapeHtml(image)}" />` : "") +
-        `\n<meta property="article:published_time" content="${escapeHtml(publishedTime)}" />` +
-        `\n<meta property="article:modified_time" content="${escapeHtml(modifiedTime)}" />` +
-        `\n<meta name="twitter:card" content="summary_large_image" />` +
-        `\n<meta name="twitter:title" content="${escapeHtml(title)}" />` +
-        `\n<meta name="twitter:description" content="${escapeHtml(desc)}" />` +
-        (image ? `\n<meta name="twitter:image" content="${escapeHtml(image)}" />` : "") +
-        `\n<script type="application/ld+json">${escapeJsonLd(JSON.stringify(jsonLd))}</script>` +
-        `\n`,
-    };
-  }
-
-  // ── About ──
-  if (path === "/about") return simplePage("关于", `${origin}/about`);
-
-  // ── Archive ──
-  if (path === "/archive") return simplePage("归档", `${origin}/archive`);
-
-  // ── Tags ──
-  if (path === "/tags") return simplePage("标签", `${origin}/tags`);
-
-  // ── Tag ──
-  if (path.startsWith("/tag/")) {
-    const tag = decodeURIComponent(path.slice("/tag/".length));
-    const title = `标签: ${tag} - ${siteName}`;
-    const canonical = `${origin}/tag/${encodeURIComponent(tag)}`;
-    return {
-      title,
-      headTags:
-        `\n<title>${escapeHtml(title)}</title>` +
-        `\n<meta name="description" content="${escapeHtml(`${tag} - ${siteName}`)}" />` +
-        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:type" content="website" />` +
-        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
-        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
-        `\n`,
-    };
-  }
-
-  // ── Categories ──
-  if (path === "/categories") return simplePage("分类", `${origin}/categories`);
-
-  // ── Category ──
-  if (path.startsWith("/category/")) {
-    const cat = decodeURIComponent(path.slice("/category/".length));
-    const title = `分类: ${cat} - ${siteName}`;
-    const canonical = `${origin}/category/${encodeURIComponent(cat)}`;
-    return {
-      title,
-      headTags:
-        `\n<title>${escapeHtml(title)}</title>` +
-        `\n<meta name="description" content="${escapeHtml(`${cat} - ${siteName}`)}" />` +
-        `\n<link rel="canonical" href="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:type" content="website" />` +
-        `\n<meta property="og:title" content="${escapeHtml(title)}" />` +
-        `\n<meta property="og:url" content="${escapeHtml(canonical)}" />` +
-        `\n<meta property="og:site_name" content="${escapeHtml(siteName)}" />` +
-        `\n`,
-    };
-  }
-
-  // ── Links ──
-  if (path === "/links") return simplePage("友情链接", `${origin}/links`);
-
-  return { title: siteName, headTags: "" };
-}
+import { buildSeoHead, renderSeoHead, type SeoLoaderData } from "./seo";
 
 export async function render(requestUrl: string, opts?: { headers?: Record<string, string> }) {
   const url = new URL(requestUrl);
@@ -220,12 +34,12 @@ export async function render(requestUrl: string, opts?: { headers?: Record<strin
     errors: null,
   };
 
-  const head = makeHead({ url, loaderData: context.loaderData });
+  const head = buildSeoHead({ url, loaderData: context.loaderData as SeoLoaderData });
 
   return {
     type: "render" as const,
     appHtml,
     hydrationData,
-    headTags: head.headTags,
+    headTags: renderSeoHead(head),
   };
 }

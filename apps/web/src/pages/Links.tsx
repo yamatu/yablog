@@ -90,7 +90,7 @@ export function LinksPage() {
                   key={l.id}
                   href={l.url}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="card linkCard"
                 >
                   <div className="linkCardInner">
@@ -196,7 +196,7 @@ export function LinksPage() {
                 <div key={r.id} className="glass linkMessage">
                   <div className="linkMessageHeader">
                     <div className="linkMessageName">
-                      <a href={r.url} target="_blank" rel="noreferrer">
+                      <a href={r.url} target="_blank" rel="ugc nofollow noopener noreferrer">
                         {r.name}
                       </a>
                     </div>

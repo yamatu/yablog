@@ -100,6 +100,13 @@ export type SiteSettings = {
     brandText: string;
     links: { label: string; path: string; icon: string }[];
   };
+  seo: {
+    defaultDescription: string;
+    defaultKeywords: string[];
+    defaultOgImage: string;
+    defaultOgImageAlt: string;
+    twitterHandle: string;
+  };
   tab: {
     title: string;
     awayTitle: string;

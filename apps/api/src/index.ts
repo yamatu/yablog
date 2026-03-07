@@ -882,9 +882,18 @@ app.get("/robots.txt", (req, res) => {
   const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "localhost").split(",")[0].trim();
   const origin = `${proto}://${host}`;
+  const aiBots = ["Googlebot", "Bingbot", "PerplexityBot", "ChatGPT-User", "GPTBot", "ClaudeBot", "anthropic-ai"];
   res.setHeader("content-type", "text/plain; charset=utf-8");
   res.setHeader("cache-control", "no-store");
-  return res.send(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
+  return res.send(
+    [
+      "User-agent: *",
+      "Allow: /",
+      "",
+      ...aiBots.flatMap((bot) => [`User-agent: ${bot}`, "Allow: /", ""]),
+      `Sitemap: ${origin}/sitemap.xml`,
+    ].join("\n"),
+  );
 });
 
 app.get("/sitemap.xml", (req, res) => {
@@ -900,18 +909,44 @@ app.get("/sitemap.xml", (req, res) => {
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&apos;");
 
+  const absoluteUrl = (value: string | null | undefined) => {
+    const input = String(value ?? "").trim();
+    if (!input) return "";
+    if (/^https?:\/\//i.test(input)) return input;
+    if (input.startsWith("//")) return `${proto}:${input}`;
+    try {
+      return new URL(input, `${origin}/`).toString();
+    } catch {
+      return "";
+    }
+  };
+
+  const imageTag = (value: string | null | undefined, title?: string) => {
+    const image = absoluteUrl(value);
+    if (!image) return "";
+    return `<image:image><image:loc>${esc(image)}</image:loc>${title ? `<image:title>${esc(title)}</image:title>` : ""}</image:image>`;
+  };
+
   const { items } = listPosts(db, { includeDrafts: false, page: 1, limit: 5000 });
 
   const urls: string[] = [];
+  const homeTitle = siteCache.home?.title?.trim() || siteCache.nav?.brandText?.trim() || "YaBlog";
+  const homeImage = siteCache.seo?.defaultOgImage || siteCache.images?.homeHero || siteCache.images?.defaultPostCover;
   urls.push(
-    `<url><loc>${esc(origin + "/")}</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+    `<url><loc>${esc(origin + "/")}</loc><changefreq>daily</changefreq><priority>1.0</priority>${imageTag(homeImage, homeTitle)}</url>`,
   );
 
   // Static pages
-  const staticPages = ["/about", "/archive", "/tags", "/categories", "/links"];
+  const staticPages = [
+    { path: "/about", image: siteCache.images?.aboutHero, title: siteCache.about?.title || "关于" },
+    { path: "/archive", image: siteCache.images?.archiveHero, title: "归档" },
+    { path: "/tags", image: siteCache.images?.tagsHero, title: "标签" },
+    { path: "/categories", image: siteCache.images?.tagsHero, title: "分类" },
+    { path: "/links", image: siteCache.images?.archiveHero, title: "友情链接" },
+  ];
   for (const p of staticPages) {
     urls.push(
-      `<url><loc>${esc(origin + p)}</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>`,
+      `<url><loc>${esc(origin + p.path)}</loc><changefreq>weekly</changefreq><priority>0.5</priority>${imageTag(p.image, p.title)}</url>`,
     );
   }
 
@@ -919,7 +954,7 @@ app.get("/sitemap.xml", (req, res) => {
   const tags = listTags(db);
   for (const t of tags) {
     urls.push(
-      `<url><loc>${esc(origin + "/tag/" + encodeURIComponent(t))}</loc><changefreq>weekly</changefreq><priority>0.4</priority></url>`,
+      `<url><loc>${esc(origin + "/tag/" + encodeURIComponent(t))}</loc><changefreq>weekly</changefreq><priority>0.4</priority>${imageTag(siteCache.images?.tagsHero, t)}</url>`,
     );
   }
 
@@ -927,7 +962,7 @@ app.get("/sitemap.xml", (req, res) => {
   const categories = listCategories(db);
   for (const c of categories) {
     urls.push(
-      `<url><loc>${esc(origin + "/category/" + encodeURIComponent(c.name))}</loc><changefreq>weekly</changefreq><priority>0.4</priority></url>`,
+      `<url><loc>${esc(origin + "/category/" + encodeURIComponent(c.name))}</loc><changefreq>weekly</changefreq><priority>0.4</priority>${imageTag(siteCache.images?.tagsHero, c.name)}</url>`,
     );
   }
 
@@ -935,13 +970,14 @@ app.get("/sitemap.xml", (req, res) => {
   for (const p of items) {
     const loc = `${origin}/post/${encodeURIComponent(p.slug)}`;
     const lastmod = new Date(p.updatedAt || p.publishedAt || p.createdAt).toISOString();
+    const cover = p.coverImage || siteCache.images?.defaultPostCover || siteCache.seo?.defaultOgImage;
     urls.push(
-      `<url><loc>${esc(loc)}</loc><lastmod>${esc(lastmod)}</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>`,
+      `<url><loc>${esc(loc)}</loc><lastmod>${esc(lastmod)}</lastmod><changefreq>weekly</changefreq><priority>0.9</priority>${imageTag(cover, p.title)}</url>`,
     );
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">` +
     urls.join("") +
     `</urlset>`;
 
@@ -1161,6 +1197,13 @@ adminRouter.put("/site", (req: AuthedRequest, res) => {
           }),
         )
         .default([]),
+    }),
+    seo: z.object({
+      defaultDescription: z.string().max(200).default(""),
+      defaultKeywords: z.array(z.string().min(1).max(40)).max(20).default([]),
+      defaultOgImage: z.string().max(2000).default(""),
+      defaultOgImageAlt: z.string().max(120).default(""),
+      twitterHandle: z.string().max(80).default(""),
     }),
     tab: z.object({
       title: z.string().min(1).max(60),

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useLocation, useMatches, useNavigate, useSearchParams } from "react-router-dom";
 import {
   MdArchive,
   MdDarkMode,
@@ -17,10 +17,12 @@ import {
 
 import { applyTheme, getSavedTheme, getSystemTheme, saveTheme, Theme } from "../theme";
 import { useSite } from "../site";
+import { applySeoHead, buildSeoHead, type SeoLoaderData } from "../seo";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const matches = useMatches();
   const { site } = useSite();
   const [sp] = useSearchParams();
   const initial = useMemo(() => sp.get("q") ?? "", [sp]);
@@ -110,6 +112,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const tabTitle = site?.tab?.title?.trim() || brandText || "YaBlog";
   const awayTitle = site?.tab?.awayTitle?.trim() || tabTitle;
   const faviconUrl = site?.tab?.faviconUrl?.trim() || "";
+  const seoLoaderData = useMemo(() => {
+    const data: SeoLoaderData = {};
+    for (const match of matches) {
+      if (!match.id) continue;
+      (data as Record<string, unknown>)[match.id] = match.data ?? null;
+    }
+    return data;
+  }, [matches]);
+
+  useEffect(() => {
+    const head = buildSeoHead({
+      url: new URL(window.location.href),
+      loaderData: seoLoaderData,
+      site,
+    });
+    applySeoHead(head);
+    if (document.visibilityState === "visible") {
+      lastVisibleTitleRef.current = head.title;
+    }
+  }, [location.pathname, location.search, seoLoaderData, site]);
 
   useEffect(() => {
     // Update favicon (client-side) without rebuild
@@ -122,15 +144,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
     link.href = faviconUrl;
     if (!links[0]) head.appendChild(link);
   }, [faviconUrl, showChrome]);
-
-  useEffect(() => {
-    if (!showChrome) return;
-    // Set default title on navigation when visible
-    if (document.visibilityState === "visible") {
-      document.title = tabTitle;
-      lastVisibleTitleRef.current = tabTitle;
-    }
-  }, [location.pathname, tabTitle, showChrome]);
 
   useEffect(() => {
     if (!showChrome) return;
@@ -171,7 +184,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               );
 
               return isExternal ? (
-                <a key={`${item.label}:${item.path}`} href={item.path} target="_blank" rel="noreferrer">
+                <a key={`${item.label}:${item.path}`} href={item.path} target="_blank" rel="noopener noreferrer">
                   {content}
                 </a>
               ) : (
@@ -231,7 +244,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </span>
               );
               return isExternal ? (
-                <a key={`${item.label}:${item.path}`} href={item.path} target="_blank" rel="noreferrer">
+                <a key={`${item.label}:${item.path}`} href={item.path} target="_blank" rel="noopener noreferrer">
                   {content}
                 </a>
               ) : (

@@ -1073,6 +1073,59 @@ export function AdminSettingsPage() {
               </div>
 
               <div>
+                <div className="widget-title">SEO / GEO 基础设置</div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <textarea
+                    value={siteDraft.seo.defaultDescription}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, seo: { ...siteDraft.seo, defaultDescription: e.target.value } })
+                    }
+                    rows={3}
+                    placeholder="站点默认描述，建议 120-160 字内，用于首页与公共页面的 description"
+                  />
+                  <textarea
+                    value={siteDraft.seo.defaultKeywords.join("\n")}
+                    onChange={(e) =>
+                      setSiteDraft({
+                        ...siteDraft,
+                        seo: {
+                          ...siteDraft.seo,
+                          defaultKeywords: e.target.value
+                            .split(/[\n,，]+/)
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                            .slice(0, 20),
+                        },
+                      })
+                    }
+                    rows={4}
+                    placeholder={"默认关键词（每行一个，或用逗号分隔）\n例如：博客\n技术博客\n前端开发"}
+                  />
+                  <ImageField
+                    label="默认分享图（Open Graph / Twitter）"
+                    value={siteDraft.seo.defaultOgImage}
+                    onChange={(v) => setSiteDraft({ ...siteDraft, seo: { ...siteDraft.seo, defaultOgImage: v } })}
+                    help="建议 1200x630，未设置时会回退到首页头图。"
+                  />
+                  <input
+                    value={siteDraft.seo.defaultOgImageAlt}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, seo: { ...siteDraft.seo, defaultOgImageAlt: e.target.value } })
+                    }
+                    placeholder="默认分享图 Alt 文本（例如：YaBlog 博客首页）"
+                  />
+                  <input
+                    value={siteDraft.seo.twitterHandle}
+                    onChange={(e) =>
+                      setSiteDraft({ ...siteDraft, seo: { ...siteDraft.seo, twitterHandle: e.target.value } })
+                    }
+                    placeholder="Twitter / X 账号（可选，例如 @yablog）"
+                  />
+                  <div className="muted">这些设置会自动用于 SSR 页面 Head、Open Graph、Twitter 卡片、结构化数据和站点地图图片。</div>
+                </div>
+              </div>
+
+              <div>
                 <div className="widget-title">底部 Footer</div>
                 <div style={{ display: "grid", gap: 10 }}>
                   <textarea
@@ -1702,7 +1755,7 @@ function AdminCommentsPanel() {
                     </div>
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>
-                    <a href={`/post/${c.postSlug}`} target="_blank" rel="noreferrer">/post/{c.postSlug}</a>
+                    <a href={`/post/${c.postSlug}`} target="_blank" rel="noopener noreferrer">/post/{c.postSlug}</a>
                     {" · "}
                     {c.author}
                     {" · "}
@@ -2314,7 +2367,7 @@ function AdminLinksPanel() {
                         }
                       />
                       <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        <a href={r.url} target="_blank" rel="noreferrer">{r.name}</a>
+                        <a href={r.url} target="_blank" rel="ugc nofollow noopener noreferrer">{r.name}</a>
                       </div>
                     </div>
                     <div className="muted" style={{ fontSize: 12 }}>

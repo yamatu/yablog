@@ -130,6 +130,18 @@ export function Markdown({
   };
 
   const defaults: Components = {
+    a: ({ href, children, ...props }) => {
+      const url = String(href ?? "");
+      const isExternal = /^https?:\/\//i.test(url);
+      const rel = isExternal
+        ? (sanitize ? "ugc nofollow noopener noreferrer" : "noopener noreferrer")
+        : undefined;
+      return (
+        <a {...props} href={href} target={isExternal ? "_blank" : props.target} rel={rel ?? props.rel}>
+          {children}
+        </a>
+      );
+    },
     img: ({ style, title, ...props }) => {
       const { width, height } = parseSizing(title);
       const src = String((props as any)?.src ?? "");

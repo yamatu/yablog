@@ -81,7 +81,7 @@ export function Sidebar() {
                 {b.label}
               </Link>
             ) : (
-              <a key={b.label} href={b.url} className="btn-follow" target="_blank" rel="noreferrer">
+              <a key={b.label} href={b.url} className="btn-follow" target="_blank" rel="noopener noreferrer">
                 {b.label}
               </a>
             );
@@ -91,7 +91,7 @@ export function Sidebar() {
         {(sidebar?.socials?.length ?? 0) > 0 ? (
           <div className="social-row" aria-label="Social links">
             {sidebar!.socials.map((s) => (
-              <a key={`${s.type}:${s.url}`} href={s.url} target="_blank" rel="noreferrer" title={s.label ?? s.type}>
+              <a key={`${s.type}:${s.url}`} href={s.url} target="_blank" rel="noopener noreferrer" title={s.label ?? s.type}>
                 {socialIcon(s.type)}
               </a>
             ))}
