@@ -252,6 +252,7 @@ function createHead(args: {
   const twitterHandle = normalizeHandle(site?.seo?.twitterHandle);
   const image = args.image || "";
   const imageAlt = args.imageAlt || defaultImageAlt(site);
+  const origin = args.canonical ? new URL(args.canonical).origin : "";
   const tags: HeadTag[] = [
     meta({ name: "description", content: args.description }),
     meta({ name: "robots", content: args.robots || DEFAULT_ROBOTS }),
@@ -267,6 +268,11 @@ function createHead(args: {
     meta({ name: "twitter:title", content: args.title }),
     meta({ name: "twitter:description", content: args.description }),
   ];
+
+  // RSS feed discovery
+  if (origin) {
+    tags.push(link({ rel: "alternate", type: "application/rss+xml", title: `${brandName(site)} RSS`, href: `${origin}/rss.xml` }));
+  }
 
   if (args.keywords?.length) {
     tags.push(meta({ name: "keywords", content: args.keywords.join(", ") }));
@@ -340,6 +346,7 @@ export function buildSeoHead(args: {
     const posts = [...(data?.pinned ?? []), ...(data?.posts ?? [])].slice(0, 8);
     const title = site?.home?.title?.trim() || titleBase(site);
     const description = fallbackDescription;
+    const author = authorName(site);
     const websiteJsonLd: JsonLd = {
       "@context": "https://schema.org",
       "@type": "WebSite",
@@ -348,6 +355,7 @@ export function buildSeoHead(args: {
       description,
       url: homeCanonical,
       inLanguage: LANGUAGE,
+      publisher: organizationJsonLd(site, origin),
       potentialAction: {
         "@type": "SearchAction",
         target: `${origin}/search?q={search_term_string}`,
@@ -362,15 +370,48 @@ export function buildSeoHead(args: {
           description,
           url: homeCanonical,
           inLanguage: LANGUAGE,
-          blogPost: posts.slice(0, 6).map((post) => ({
-            "@type": "BlogPosting",
-            headline: post.title,
-            url: `${origin}/post/${encodeURIComponent(post.slug)}`,
-            datePublished: post.publishedAt || post.createdAt,
-            dateModified: post.updatedAt,
-          })),
+          author: { "@type": "Person", name: author, url: `${origin}/about` },
+          publisher: organizationJsonLd(site, origin),
+          blogPost: posts.slice(0, 6).map((post) => {
+            const postUrl = `${origin}/post/${encodeURIComponent(post.slug)}`;
+            const postImage = absoluteUrl(origin, post.coverImage) || fallbackImage;
+            const postDesc = toDescription(post.summary || post.contentMd, "");
+            return {
+              "@type": "BlogPosting",
+              headline: post.title,
+              url: postUrl,
+              mainEntityOfPage: postUrl,
+              datePublished: post.publishedAt || post.createdAt,
+              dateModified: post.updatedAt,
+              description: postDesc || undefined,
+              image: postImage || undefined,
+              author: { "@type": "Person", name: author },
+              articleSection: post.categories?.[0] || undefined,
+              keywords: [...(post.tags || []), ...(post.categories || [])].join(", ") || undefined,
+            };
+          }),
         }
       : null;
+
+    // SiteNavigationElement for nav links
+    const navLinks = site?.nav?.links?.length
+      ? site.nav.links
+      : [
+          { label: "首页", path: "/" },
+          { label: "归档", path: "/archive" },
+          { label: "标签", path: "/tags" },
+          { label: "友链", path: "/links" },
+          { label: "关于", path: "/about" },
+        ];
+    const navJsonLd: JsonLd = {
+      "@context": "https://schema.org",
+      "@type": "SiteNavigationElement",
+      name: navLinks.map((item) => item.label),
+      url: navLinks.map((item) =>
+        /^https?:\/\//i.test(item.path) ? item.path : `${origin}${item.path}`,
+      ),
+    };
+
     return createHead({
       site,
       title,
@@ -379,7 +420,7 @@ export function buildSeoHead(args: {
       keywords: fallbackKeywords,
       image: fallbackImage,
       imageAlt: defaultImageAlt(site),
-      jsonLd: [websiteJsonLd, organizationJsonLd(site, origin), ...(blogJsonLd ? [blogJsonLd] : [])],
+      jsonLd: [websiteJsonLd, organizationJsonLd(site, origin), navJsonLd, ...(blogJsonLd ? [blogJsonLd] : [])],
     });
   }
 
@@ -441,7 +482,7 @@ export function buildSeoHead(args: {
     ];
     return createHead({
       site,
-      title: post.title,
+      title: joinTitle(post.title, site),
       description,
       canonical,
       keywords,

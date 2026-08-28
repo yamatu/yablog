@@ -884,13 +884,16 @@ app.get("/robots.txt", (req, res) => {
   const origin = `${proto}://${host}`;
   const aiBots = ["Googlebot", "Bingbot", "PerplexityBot", "ChatGPT-User", "GPTBot", "ClaudeBot", "anthropic-ai"];
   res.setHeader("content-type", "text/plain; charset=utf-8");
-  res.setHeader("cache-control", "no-store");
+  res.setHeader("cache-control", "public, max-age=3600, s-maxage=3600");
   return res.send(
     [
       "User-agent: *",
       "Allow: /",
+      "Disallow: /api/",
+      "Disallow: /admin/",
+      "Disallow: /search",
       "",
-      ...aiBots.flatMap((bot) => [`User-agent: ${bot}`, "Allow: /", ""]),
+      ...aiBots.flatMap((bot) => [`User-agent: ${bot}`, "Allow: /", "Disallow: /api/", "Disallow: /admin/", ""]),
       `Sitemap: ${origin}/sitemap.xml`,
     ].join("\n"),
   );
@@ -982,7 +985,99 @@ app.get("/sitemap.xml", (req, res) => {
     `</urlset>`;
 
   res.setHeader("content-type", "application/xml; charset=utf-8");
-  res.setHeader("cache-control", "no-store");
+  res.setHeader("cache-control", "public, max-age=3600, s-maxage=3600");
+  return res.send(xml);
+});
+
+// RSS 2.0 feed
+app.get("/rss.xml", (req, res) => {
+  const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "localhost").split(",")[0].trim();
+  const origin = `${proto}://${host}`;
+
+  const esc = (s: string) =>
+    s
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&apos;");
+
+  const cdata = (s: string) => `<![CDATA[${s.replaceAll("]]>", "]]]]><![CDATA[>")}]]>`;
+
+  const { items } = listPosts(db, { includeDrafts: false, page: 1, limit: 50 });
+
+  const siteTitle = siteCache.home?.title?.trim() || siteCache.nav?.brandText?.trim() || "YaBlog";
+  const siteDescription =
+    siteCache.seo?.defaultDescription?.trim() ||
+    siteCache.home?.subtitle?.trim() ||
+    siteCache.sidebar?.bio?.trim() ||
+    `${siteTitle} 的个人博客`;
+  const siteImage = siteCache.seo?.defaultOgImage || siteCache.images?.homeHero || "";
+
+  const toRfc822 = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toUTCString();
+    } catch {
+      return new Date().toUTCString();
+    }
+  };
+
+  const absoluteUrl = (value: string | null | undefined) => {
+    const input = String(value ?? "").trim();
+    if (!input) return "";
+    if (/^https?:\/\//i.test(input)) return input;
+    if (input.startsWith("//")) return `${proto}:${input}`;
+    try {
+      return new URL(input, `${origin}/`).toString();
+    } catch {
+      return "";
+    }
+  };
+
+  const lastBuildDate = items.length
+    ? toRfc822(items[0].updatedAt || items[0].publishedAt || items[0].createdAt)
+    : toRfc822(new Date().toISOString());
+
+  const rssItems = items.map((p) => {
+    const link = `${origin}/post/${encodeURIComponent(p.slug)}`;
+    const pubDate = toRfc822(p.publishedAt || p.createdAt);
+    const desc = (p.summary || p.contentMd || "").replace(/```[\s\S]*?```/g, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
+    const cover = absoluteUrl(p.coverImage);
+    const categories = [...(p.categories || []), ...(p.tags || [])];
+    return [
+      "<item>",
+      `<title>${cdata(p.title)}</title>`,
+      `<link>${esc(link)}</link>`,
+      `<guid isPermaLink="true">${esc(link)}</guid>`,
+      `<pubDate>${pubDate}</pubDate>`,
+      `<description>${cdata(desc)}</description>`,
+      ...categories.map((c) => `<category>${cdata(c)}</category>`),
+      ...(cover ? [`<enclosure url="${esc(cover)}" type="image/jpeg" />`] : []),
+      "</item>",
+    ].join("");
+  });
+
+  const imageBlock = absoluteUrl(siteImage)
+    ? `<image><url>${esc(absoluteUrl(siteImage))}</url><title>${esc(siteTitle)}</title><link>${esc(origin + "/")}</link></image>`
+    : "";
+
+  const xml =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">` +
+    `<channel>` +
+    `<title>${esc(siteTitle)}</title>` +
+    `<link>${esc(origin + "/")}</link>` +
+    `<description>${esc(siteDescription)}</description>` +
+    `<language>zh-CN</language>` +
+    `<lastBuildDate>${lastBuildDate}</lastBuildDate>` +
+    `<atom:link href="${esc(origin + "/rss.xml")}" rel="self" type="application/rss+xml" />` +
+    imageBlock +
+    rssItems.join("") +
+    `</channel></rss>`;
+
+  res.setHeader("content-type", "application/rss+xml; charset=utf-8");
+  res.setHeader("cache-control", "public, max-age=3600, s-maxage=3600");
   return res.send(xml);
 });
 
